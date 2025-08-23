@@ -1,0 +1,38 @@
+// import connectDB from "@/config/db";
+import stripeRoutes from "@/routes/stripe.route";
+
+import cors from "cors";
+import dotenv from "dotenv";
+
+import express, { Application, json, urlencoded } from "express";
+
+dotenv.config();
+const port = process.env.PORT || 8000;
+const app: Application = express();
+const devMode = process.env.MODE === "dev";
+
+// connectDB();
+
+app.use(urlencoded({ extended: true }));
+app.use(json());
+
+app.use(
+  cors({
+    origin: devMode
+      ? ["http://localhost:5173", "http://localhost:4173"]
+      : ["http://localhost:5173", "http://localhost:4173"],
+    methods: "GET,POST,PATCH,PUT,DELETE,OPTIONS",
+    allowedHeaders: "Content-Type,Authorization",
+    credentials: true,
+  })
+);
+
+app.use("/api/stripe", stripeRoutes);
+
+app.get("/", (req, res) => {
+  res.status(200).json({ msg: "Server is up and running" });
+});
+
+const server = app.listen(port, () => {
+  console.log(`Server is listening at port ${port}`);
+});
