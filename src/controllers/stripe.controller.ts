@@ -7,7 +7,6 @@ export const checkoutPlan = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // console.log("here work?");
     const session = await stripe.checkout.sessions.create({
       line_items: [
         {
@@ -39,8 +38,6 @@ export const checkoutPlan = async (
       cancel_url: `${process.env.BASE_URL}`,
     });
 
-    console.log(session);
-    // res.redirect(session.url);
     res.status(200).json({
       id: session.id,
     });

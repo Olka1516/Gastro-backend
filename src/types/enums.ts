@@ -1,6 +1,15 @@
 export enum EResponseMessage {
   IS_REQUIRED = "requiredFields",
+  PASSWORD_LENGTH = "passwordLength",
+  EMAIL_TAKEN = "emailTaken",
+  PLACE_TAKEN = "placeTaken",
+  USER_REGISTERED = "userRegistered",
+  USER_LOGIN = "userLogin",
+  INVALID_CREDENTIALS = "invalidCredentials",
+  PASS_MISS_MACH = "passMissMatch",
+  USER_NOT_FOUND = "userNotFound",
   TOKEN_REQUIRED = "tokenRequired",
   INVALID_TOKEN = "invalidToken",
   TOKEN_REFRESHED = "tokenRefreshed",
+  SERVER_ERROR = "serverError",
 }
