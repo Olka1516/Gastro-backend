@@ -12,4 +12,6 @@ export enum EResponseMessage {
   INVALID_TOKEN = "invalidToken",
   TOKEN_REFRESHED = "tokenRefreshed",
   SERVER_ERROR = "serverError",
+  TOKEN_MISSING = "tockenMissing",
+  TOKEN_INVALID = "tockenInvalid",
 }

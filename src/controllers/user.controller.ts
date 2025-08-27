@@ -4,6 +4,7 @@ import { EResponseMessage } from "@/types/enums";
 import bcrypt from "bcryptjs";
 import { NextFunction, Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
+import jwt from "jsonwebtoken";
 
 export const register = async (
   req: Request,
@@ -99,6 +100,48 @@ export const login = async (
         refreshToken,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const checkAuth = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    console.log("here");
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+
+    if (!token) {
+      res.status(401).json({ message: EResponseMessage.TOKEN_MISSING });
+      return;
+    }
+
+    jwt.verify(
+      token,
+      process.env.JWT_SECRET as string,
+      async (err, decoded: any) => {
+        if (err) {
+          res.status(401).json({
+            message: EResponseMessage.TOKEN_INVALID,
+          });
+          return;
+        }
+
+        const user = await UserEntity.findOne({ id: decoded.id });
+        if (!user) {
+          res.status(401).json({
+            message: EResponseMessage.USER_NOT_FOUND,
+          });
+          return;
+        }
+
+        res.status(200).json({ user });
+      }
+    );
   } catch (error) {
     next(error);
   }
