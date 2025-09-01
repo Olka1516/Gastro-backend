@@ -3,6 +3,7 @@ dotenv.config();
 import stripeRoutes from "@/routes/stripe.route";
 import userRoutes from "@/routes/user.route";
 import refreshRoutes from "@/routes/refresh.route";
+import dashboardRoutes from "@/routes/dashboard.route";
 import connectDB from "@/config/db";
 
 import cors from "cors";
@@ -32,6 +33,7 @@ app.use(
 app.use("/api/users", userRoutes);
 app.use("/api/stripe", stripeRoutes);
 app.use("/api/refresh", refreshRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 app.get("/", (req, res) => {
   res.status(200).json({ msg: "Server is up and running" });

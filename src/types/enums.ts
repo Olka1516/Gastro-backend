@@ -15,3 +15,16 @@ export enum EResponseMessage {
   TOKEN_MISSING = "tockenMissing",
   TOKEN_INVALID = "tockenInvalid",
 }
+
+export enum EPlan {
+  free = "free",
+  standart = "standart",
+  premium = "premium",
+}
+
+export enum EStatus {
+  pending = "pending",
+  complete = "complete",
+  error = "error",
+  cancelled = "cancelled",
+}

@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { NextFunction, Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import jwt from "jsonwebtoken";
+import { IPlan } from "@/types/entities";
 
 export const register = async (
   req: Request,
@@ -111,7 +112,6 @@ export const checkAuth = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    console.log("here");
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
 
@@ -145,4 +145,26 @@ export const checkAuth = async (
   } catch (error) {
     next(error);
   }
+};
+
+export const changeUserPlan = async (userId: string, planInfo: IPlan) => {
+  if (!userId) {
+    return { message: EResponseMessage.INVALID_CREDENTIALS, success: false };
+  }
+
+  const updated = await UserEntity.findOneAndUpdate(
+    { id: userId },
+    {
+      planName: planInfo.planName,
+      status: planInfo.status,
+      planDate: new Date(),
+    },
+    { new: true }
+  );
+
+  if (!updated) {
+    return { message: EResponseMessage.USER_NOT_FOUND, success: false };
+  }
+
+  return { updated, success: true };
 };

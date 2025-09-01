@@ -1,9 +1,9 @@
-import { checkoutPlan } from "@/controllers/stripe.controller";
+import { getDetails } from "@/controllers/dashboard.controller";
 import authMiddleware from "@/middlewares/auth.middleware";
 import { Router } from "express";
 
 const router = Router();
 
-router.post("/getCheckoutId", authMiddleware, checkoutPlan);
+router.get("/get-details", authMiddleware, getDetails);
 
 export default router;
