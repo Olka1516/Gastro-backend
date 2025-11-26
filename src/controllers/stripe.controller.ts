@@ -1,7 +1,8 @@
 import { stripe } from "@/config/stripe";
 import { NextFunction, Request, Response } from "express";
 import { changeUserPlan } from "./user.controller";
-import { EStatus } from "@/types/enums";
+import { EResponseMessage, EStatus } from "@/types/enums";
+import UserEntity from "@/entities/User.entity";
 
 export const checkoutPlan = async (
   req: Request,
@@ -26,24 +27,25 @@ export const checkoutPlan = async (
           quantity: 1,
         },
       ],
+      metadata: {
+        plan: name,
+        date: new Date().toISOString(),
+      },
       mode: "payment",
       customer_email: email,
       success_url: `${process.env.BASE_URL}/dashboard`,
       cancel_url: `${process.env.BASE_URL}`,
     });
 
-    const changeData = await changeUserPlan(id, {
-      planName: name,
-      status: EStatus.pending,
-    });
-
-    if (!changeData.success) {
-      res.status(401).json({ message: changeData.message });
+    const userInfo = await UserEntity.findOne({ id: id });
+    if (!userInfo) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
     }
 
     res.status(200).json({
       id: session.id,
-      user: changeData.updated,
+      user: userInfo,
     });
   } catch (error) {
     next(error);
@@ -57,6 +59,5 @@ export const checkSession = async (email: string) => {
     },
     limit: 1,
   });
-  //TODO: check if array exist
-  return session.data[0].payment_status;
+  return session.data[0];
 };

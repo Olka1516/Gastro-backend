@@ -1,6 +1,6 @@
 import { generateAccessToken, generateRefreshToken } from "@/config/jwt";
 import UserEntity from "@/entities/User.entity";
-import { EResponseMessage } from "@/types/enums";
+import { EPlan, EResponseMessage, EStatus } from "@/types/enums";
 import bcrypt from "bcryptjs";
 import { NextFunction, Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
@@ -142,6 +142,43 @@ export const checkAuth = async (
         res.status(200).json({ user });
       }
     );
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const putFreePlan = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user?.id) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+    const ownerID = req.user.id;
+    const userInfo = await UserEntity.findOne({ id: ownerID });
+    if (!userInfo) {
+      res.status(400).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    let changedData;
+    if (EPlan.free !== userInfo.planName) {
+      changedData = await changeUserPlan(ownerID, {
+        planName: EPlan.free,
+        status: EStatus.complete,
+      });
+
+      if (!changedData?.success) {
+        res.status(400).json({ message: changedData?.message });
+        return;
+      }
+    }
+
+    const user = changedData?.updated || userInfo;
+    res.status(200).json({ user });
   } catch (error) {
     next(error);
   }

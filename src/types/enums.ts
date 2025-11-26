@@ -14,6 +14,12 @@ export enum EResponseMessage {
   SERVER_ERROR = "serverError",
   TOKEN_MISSING = "tockenMissing",
   TOKEN_INVALID = "tockenInvalid",
+  DISH_CREATED = "dishCreated",
+  DISH_UPDATED = "dishUpdated",
+  DISH_NOT_FOUND = "dishNotFound",
+  DISH_NAME_REQUIRED = "dishNameRequired",
+  DISH_PRICE_REQUIRED = "dishPriceRequired",
+  INVALID_PRICE = "invalidPrice",
 }
 
 export enum EPlan {

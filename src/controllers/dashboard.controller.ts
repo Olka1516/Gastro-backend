@@ -1,7 +1,12 @@
-import { EResponseMessage, EStatus } from "@/types/enums";
-import { NextFunction, Request, Response } from "express";
-import { checkSession } from "./stripe.controller";
+import cloudinary from "@/config/cloudinary";
+import DishEntity from "@/entities/Dish.entity";
 import UserEntity from "@/entities/User.entity";
+import { EResponseMessage, EStatus } from "@/types/enums";
+import { CloudinaryUploadResponse } from "@/types/express";
+import { NextFunction, Request, Response } from "express";
+import { UploadedFile } from "express-fileupload";
+import { v4 as uuidv4 } from "uuid";
+import { checkSession } from "./stripe.controller";
 import { changeUserPlan } from "./user.controller";
 
 export const getDetails = async (
@@ -10,35 +15,220 @@ export const getDetails = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    if (!req.user?.id) {
+    const ownerID = req.user?.id;
+    if (!ownerID) {
       res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
       return;
     }
-    const ownerID = req.user.id;
+
     const userInfo = await UserEntity.findOne({ id: ownerID });
     if (!userInfo) {
       res.status(400).json({ message: EResponseMessage.INVALID_CREDENTIALS });
       return;
     }
 
-    let changedData;
-    if (userInfo.status === EStatus.pending) {
-      const checkSessionResult = await checkSession(userInfo.email);
-      if (checkSessionResult !== "unpaid") {
-        changedData = await changeUserPlan(ownerID, {
-          planName: userInfo.planName,
-          status: EStatus.complete,
-        });
+    const session = await checkSession(userInfo.email);
 
-        if (!changedData?.success) {
-          res.status(400).json({ message: changedData?.message });
-          return;
+    if (!session || session.payment_status === "unpaid") {
+      res.status(400).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    let updatedUser;
+    updatedUser = userInfo;
+    if (session.metadata?.plan && session.metadata.plan !== userInfo.planName) {
+      const changeResult = await changeUserPlan(ownerID, {
+        planName: session.metadata.plan,
+        status: EStatus.complete,
+      });
+
+      if (!changeResult?.success) {
+        res.status(400).json({ message: changeResult?.message });
+        return;
+      }
+
+      updatedUser = changeResult.updated;
+    }
+
+    res.status(200).json({ user: updatedUser });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createDish = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const ownerId = req.user?.id;
+    if (!ownerId) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    const { name, description, price, category, isAvailable } = req.body;
+
+    if (!name) {
+      res.status(400).json({ message: EResponseMessage.DISH_NAME_REQUIRED });
+      return;
+    }
+
+    if (!price && price !== 0) {
+      res.status(400).json({ message: EResponseMessage.DISH_PRICE_REQUIRED });
+      return;
+    }
+
+    if (price < 0) {
+      res.status(400).json({ message: EResponseMessage.INVALID_PRICE });
+      return;
+    }
+
+    let imageUrl = "";
+
+    // Якщо є зображення - завантажуємо в Cloudinary
+    if (req.files?.image) {
+      const imageFile = req.files.image as UploadedFile;
+
+      const imageUpload = await new Promise<CloudinaryUploadResponse>(
+        (resolve, reject) => {
+          cloudinary.uploader
+            .upload_stream(
+              {
+                folder: "dishes",
+                transformation: [
+                  { width: 800, height: 600, crop: "limit" },
+                  { quality: "auto" },
+                ],
+              },
+              (error, uploadResult) => {
+                if (error) {
+                  reject(error);
+                } else {
+                  resolve(uploadResult as CloudinaryUploadResponse);
+                }
+              }
+            )
+            .end(imageFile.data);
+        }
+      );
+
+      imageUrl = imageUpload.secure_url;
+    }
+
+    const newDish = await DishEntity.create({
+      id: uuidv4(),
+      name,
+      description,
+      price: Number(price),
+      category,
+      isAvailable: isAvailable || "available",
+      image: imageUrl,
+      ownerId,
+    });
+
+    res.status(201).json({
+      message: EResponseMessage.DISH_CREATED,
+      dish: newDish,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateDish = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const ownerId = req.user?.id;
+    if (!ownerId) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    const { dishId } = req.params;
+    const { name, description, price, category, isAvailable } = req.body;
+
+    if (!dishId) {
+      res.status(400).json({ message: EResponseMessage.IS_REQUIRED });
+      return;
+    }
+
+    const existingDish = await DishEntity.findOne({ id: dishId, ownerId });
+    if (!existingDish) {
+      res.status(404).json({ message: EResponseMessage.DISH_NOT_FOUND });
+      return;
+    }
+
+    if (price !== undefined && price < 0) {
+      res.status(400).json({ message: EResponseMessage.INVALID_PRICE });
+      return;
+    }
+
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
+    if (price !== undefined) updateData.price = Number(price);
+    if (category !== undefined) updateData.category = category;
+    if (isAvailable !== undefined) updateData.isAvailable = isAvailable;
+
+    // Якщо є нове зображення - завантажуємо в Cloudinary
+    if (req.files?.image) {
+      const imageFile = req.files.image as UploadedFile;
+
+      const imageUpload = await new Promise<CloudinaryUploadResponse>(
+        (resolve, reject) => {
+          cloudinary.uploader
+            .upload_stream(
+              {
+                folder: "dishes",
+                transformation: [
+                  { width: 800, height: 600, crop: "limit" },
+                  { quality: "auto" },
+                ],
+              },
+              (error, uploadResult) => {
+                if (error) {
+                  reject(error);
+                } else {
+                  resolve(uploadResult as CloudinaryUploadResponse);
+                }
+              }
+            )
+            .end(imageFile.data);
+        }
+      );
+
+      updateData.image = imageUpload.secure_url;
+
+      // Видаляємо старе зображення з Cloudinary, якщо воно існує
+      if (existingDish.image) {
+        try {
+          // Витягуємо public_id з URL
+          const publicId = existingDish.image.split("/").pop()?.split(".")[0];
+          if (publicId) {
+            await cloudinary.uploader.destroy(`dishes/${publicId}`);
+          }
+        } catch (deleteError) {
+          console.error("Error deleting old image:", deleteError);
+          // Не зупиняємо процес оновлення через помилку видалення старого зображення
         }
       }
     }
 
-    const user = changedData?.updated || userInfo;
-    res.status(200).json({ user });
+    const updatedDish = await DishEntity.findOneAndUpdate(
+      { id: dishId, ownerId },
+      updateData,
+      { new: true }
+    );
+
+    res.status(200).json({
+      message: EResponseMessage.DISH_UPDATED,
+      dish: updatedDish,
+    });
   } catch (error) {
     next(error);
   }

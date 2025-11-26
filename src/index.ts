@@ -7,6 +7,7 @@ import dashboardRoutes from "@/routes/dashboard.route";
 import connectDB from "@/config/db";
 
 import cors from "cors";
+import fileUpload from "express-fileupload";
 
 import express, { Application, json, urlencoded } from "express";
 
@@ -18,6 +19,10 @@ connectDB();
 
 app.use(urlencoded({ extended: true }));
 app.use(json());
+app.use(fileUpload({
+  useTempFiles: true,
+  tempFileDir: '/tmp/'
+}));
 
 app.use(
   cors({
