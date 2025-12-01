@@ -5,6 +5,7 @@ import { EResponseMessage, EStatus } from "@/types/enums";
 import { CloudinaryUploadResponse } from "@/types/express";
 import { NextFunction, Request, Response } from "express";
 import { UploadedFile } from "express-fileupload";
+import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
 import { checkSession } from "./stripe.controller";
 import { changeUserPlan } from "./user.controller";
@@ -91,7 +92,17 @@ export const createDish = async (
     if (req.files?.image) {
       const imageFile = req.files.image as UploadedFile;
 
-      const imageUpload = await new Promise<CloudinaryUploadResponse>(
+      // Отримуємо Buffer з файлу
+      let fileBuffer: Buffer;
+      if (imageFile.tempFilePath) {
+        // Якщо файл збережений в тимчасовій директорії
+        fileBuffer = fs.readFileSync(imageFile.tempFilePath);
+      } else {
+        // Якщо файл в пам'яті
+        fileBuffer = imageFile.data as Buffer;
+      }
+
+      const uploadResult = await new Promise<CloudinaryUploadResponse>(
         (resolve, reject) => {
           cloudinary.uploader
             .upload_stream(
@@ -110,11 +121,11 @@ export const createDish = async (
                 }
               }
             )
-            .end(imageFile.data);
+            .end(fileBuffer);
         }
       );
 
-      imageUrl = imageUpload.secure_url;
+      imageUrl = uploadResult.secure_url;
     }
 
     const newDish = await DishEntity.create({
@@ -179,6 +190,16 @@ export const updateDish = async (
     if (req.files?.image) {
       const imageFile = req.files.image as UploadedFile;
 
+      // Отримуємо Buffer з файлу
+      let fileBuffer: Buffer;
+      if (imageFile.tempFilePath) {
+        // Якщо файл збережений в тимчасовій директорії
+        fileBuffer = fs.readFileSync(imageFile.tempFilePath);
+      } else {
+        // Якщо файл в пам'яті
+        fileBuffer = imageFile.data as Buffer;
+      }
+
       const imageUpload = await new Promise<CloudinaryUploadResponse>(
         (resolve, reject) => {
           cloudinary.uploader
@@ -198,7 +219,7 @@ export const updateDish = async (
                 }
               }
             )
-            .end(imageFile.data);
+            .end(fileBuffer);
         }
       );
 
@@ -228,6 +249,78 @@ export const updateDish = async (
     res.status(200).json({
       message: EResponseMessage.DISH_UPDATED,
       dish: updatedDish,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getDishes = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const ownerId = req.user?.id;
+    if (!ownerId) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    const dishes = await DishEntity.find({ ownerId }).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      dishes,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteDish = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const ownerId = req.user?.id;
+    if (!ownerId) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    const { dishId } = req.params;
+
+    if (!dishId) {
+      res.status(400).json({ message: EResponseMessage.IS_REQUIRED });
+      return;
+    }
+
+    const existingDish = await DishEntity.findOne({ id: dishId, ownerId });
+    if (!existingDish) {
+      res.status(404).json({ message: EResponseMessage.DISH_NOT_FOUND });
+      return;
+    }
+
+    // Видаляємо зображення з Cloudinary, якщо воно існує
+    if (existingDish.image) {
+      try {
+        // Витягуємо public_id з URL
+        const publicId = existingDish.image.split("/").pop()?.split(".")[0];
+        if (publicId) {
+          await cloudinary.uploader.destroy(`dishes/${publicId}`);
+        }
+      } catch (deleteError) {
+        console.error("Error deleting image from Cloudinary:", deleteError);
+        // Не зупиняємо процес видалення через помилку видалення зображення
+      }
+    }
+
+    // Видаляємо страву з бази даних
+    await DishEntity.findOneAndDelete({ id: dishId, ownerId });
+
+    res.status(200).json({
+      message: EResponseMessage.DISH_DELETED,
     });
   } catch (error) {
     next(error);

@@ -16,6 +16,7 @@ export enum EResponseMessage {
   TOKEN_INVALID = "tockenInvalid",
   DISH_CREATED = "dishCreated",
   DISH_UPDATED = "dishUpdated",
+  DISH_DELETED = "dishDeleted",
   DISH_NOT_FOUND = "dishNotFound",
   DISH_NAME_REQUIRED = "dishNameRequired",
   DISH_PRICE_REQUIRED = "dishPriceRequired",
