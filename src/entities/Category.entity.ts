@@ -18,4 +18,3 @@ const CategorySchema: Schema = new Schema<ICategory>(
 );
 
 export default mongoose.model<ICategory & Document>("Category", CategorySchema);
-
