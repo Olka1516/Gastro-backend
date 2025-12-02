@@ -22,8 +22,17 @@ export interface IDish {
   isAvailable: string;
   image?: string;
   ownerId: string;
-  createdAt: Date;
-  updatedAt: Date;
+}
+
+export interface ICategoryItem {
+  id: string;
+  name: string;
+}
+
+export interface ICategory {
+  id: string;
+  ownerId: string;
+  categories: ICategoryItem[];
 }
 
 export interface ITokenUserData extends Pick<IUser, "email" | "id"> {}

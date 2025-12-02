@@ -21,6 +21,12 @@ export enum EResponseMessage {
   DISH_NAME_REQUIRED = "dishNameRequired",
   DISH_PRICE_REQUIRED = "dishPriceRequired",
   INVALID_PRICE = "invalidPrice",
+  CATEGORY_CREATED = "categoryCreated",
+  CATEGORY_UPDATED = "categoryUpdated",
+  CATEGORY_DELETED = "categoryDeleted",
+  CATEGORY_NOT_FOUND = "categoryNotFound",
+  CATEGORY_NAME_REQUIRED = "categoryNameRequired",
+  CATEGORY_IN_USE = "categoryInUse",
 }
 
 export enum EPlan {

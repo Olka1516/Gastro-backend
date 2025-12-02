@@ -1,4 +1,5 @@
 import cloudinary from "@/config/cloudinary";
+import CategoryEntity from "@/entities/Category.entity";
 import DishEntity from "@/entities/Dish.entity";
 import UserEntity from "@/entities/User.entity";
 import { EResponseMessage, EStatus } from "@/types/enums";
@@ -321,6 +322,223 @@ export const deleteDish = async (
 
     res.status(200).json({
       message: EResponseMessage.DISH_DELETED,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getCategories = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const ownerId = req.user?.id;
+    if (!ownerId) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    let categoryDoc = await CategoryEntity.findOne({ ownerId });
+
+    // Якщо документ не існує, створюємо новий
+    if (!categoryDoc) {
+      categoryDoc = await CategoryEntity.create({
+        id: uuidv4(),
+        ownerId,
+        categories: [],
+      });
+    }
+
+    res.status(200).json({
+      categories: categoryDoc.categories,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const addCategory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const ownerId = req.user?.id;
+    if (!ownerId) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    const { name } = req.body;
+
+    if (!name) {
+      res
+        .status(400)
+        .json({ message: EResponseMessage.CATEGORY_NAME_REQUIRED });
+      return;
+    }
+
+    let categoryDoc = await CategoryEntity.findOne({ ownerId });
+
+    // Якщо документ не існує, створюємо новий
+    if (!categoryDoc) {
+      categoryDoc = await CategoryEntity.create({
+        id: uuidv4(),
+        ownerId,
+        categories: [],
+      });
+    }
+
+    // Перевіряємо, чи категорія з таким ім'ям вже існує
+    const existingCategory = categoryDoc.categories.find(
+      (cat) => cat.name.toLowerCase() === name.toLowerCase()
+    );
+
+    if (existingCategory) {
+      res.status(400).json({ message: EResponseMessage.PLACE_TAKEN });
+      return;
+    }
+
+    // Додаємо нову категорію
+    const newCategory = {
+      id: uuidv4(),
+      name,
+    };
+
+    categoryDoc.categories.push(newCategory);
+    await categoryDoc.save();
+
+    res.status(201).json({
+      message: EResponseMessage.CATEGORY_CREATED,
+      category: newCategory,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const editCategory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const ownerId = req.user?.id;
+    if (!ownerId) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    const { id } = req.params;
+    const { name } = req.body;
+
+    if (!id) {
+      res.status(400).json({ message: EResponseMessage.IS_REQUIRED });
+      return;
+    }
+
+    if (!name) {
+      res
+        .status(400)
+        .json({ message: EResponseMessage.CATEGORY_NAME_REQUIRED });
+      return;
+    }
+
+    const categoryDoc = await CategoryEntity.findOne({ ownerId });
+    if (!categoryDoc) {
+      res.status(404).json({ message: EResponseMessage.CATEGORY_NOT_FOUND });
+      return;
+    }
+
+    // Знаходимо категорію за id
+    const categoryIndex = categoryDoc.categories.findIndex(
+      (cat) => cat.id === id
+    );
+    if (categoryIndex === -1) {
+      res.status(404).json({ message: EResponseMessage.CATEGORY_NOT_FOUND });
+      return;
+    }
+
+    // Перевіряємо, чи категорія з таким ім'ям вже існує (крім поточної)
+    const existingCategory = categoryDoc.categories.find(
+      (cat) => cat.id !== id && cat.name.toLowerCase() === name.toLowerCase()
+    );
+
+    if (existingCategory) {
+      res.status(400).json({ message: EResponseMessage.PLACE_TAKEN });
+      return;
+    }
+
+    // Оновлюємо категорію
+    categoryDoc.categories[categoryIndex].name = name;
+    await categoryDoc.save();
+
+    res.status(200).json({
+      message: EResponseMessage.CATEGORY_UPDATED,
+      category: categoryDoc.categories[categoryIndex],
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteCategory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const ownerId = req.user?.id;
+    if (!ownerId) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    const { id } = req.params;
+
+    if (!id) {
+      res.status(400).json({ message: EResponseMessage.IS_REQUIRED });
+      return;
+    }
+
+    const categoryDoc = await CategoryEntity.findOne({ ownerId });
+    if (!categoryDoc) {
+      res.status(404).json({ message: EResponseMessage.CATEGORY_NOT_FOUND });
+      return;
+    }
+
+    // Знаходимо категорію за id
+    const categoryIndex = categoryDoc.categories.findIndex(
+      (cat) => cat.id === id
+    );
+    if (categoryIndex === -1) {
+      res.status(404).json({ message: EResponseMessage.CATEGORY_NOT_FOUND });
+      return;
+    }
+
+    const categoryToDelete = categoryDoc.categories[categoryIndex];
+
+    // Перевіряємо, чи є страви, які використовують цю категорію
+    const dishesWithCategory = await DishEntity.find({
+      ownerId,
+      category: categoryToDelete.id,
+    });
+
+    if (dishesWithCategory.length > 0) {
+      res.status(400).json({
+        message: EResponseMessage.CATEGORY_IN_USE,
+      });
+      return;
+    }
+
+    // Видаляємо категорію з масиву
+    categoryDoc.categories.splice(categoryIndex, 1);
+    await categoryDoc.save();
+
+    res.status(200).json({
+      message: EResponseMessage.CATEGORY_DELETED,
     });
   } catch (error) {
     next(error);
