@@ -1,11 +1,11 @@
 import { generateAccessToken, generateRefreshToken } from "@/config/jwt";
 import UserEntity from "@/entities/User.entity";
+import { IPlan } from "@/types/entities";
 import { EPlan, EResponseMessage, EStatus } from "@/types/enums";
 import bcrypt from "bcryptjs";
 import { NextFunction, Request, Response } from "express";
-import { v4 as uuidv4 } from "uuid";
 import jwt from "jsonwebtoken";
-import { IPlan } from "@/types/entities";
+import { v4 as uuidv4 } from "uuid";
 
 export const register = async (
   req: Request,
