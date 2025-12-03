@@ -5,6 +5,7 @@ export enum EResponseMessage {
   PLACE_TAKEN = "placeTaken",
   USER_REGISTERED = "userRegistered",
   USER_LOGIN = "userLogin",
+  USER_UPDATED = "userUpdated",
   INVALID_CREDENTIALS = "invalidCredentials",
   PASS_MISS_MACH = "passMissMatch",
   USER_NOT_FOUND = "userNotFound",

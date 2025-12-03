@@ -184,6 +184,77 @@ export const putFreePlan = async (
   }
 };
 
+export const updateUser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const ownerId = req.user?.id;
+    if (!ownerId) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    const { placeName, email } = req.body;
+
+    if (!placeName || !email) {
+      res.status(400).json({ message: EResponseMessage.IS_REQUIRED });
+      return;
+    }
+
+    const userInfo = await UserEntity.findOne({ id: ownerId });
+    if (!userInfo) {
+      res.status(404).json({ message: EResponseMessage.USER_NOT_FOUND });
+      return;
+    }
+
+    // Перевіряємо, чи placeName не зайнятий іншим користувачем
+    if (placeName !== userInfo.placeName) {
+      const existingPlaceName = await UserEntity.findOne({ placeName });
+      if (existingPlaceName) {
+        res.status(400).json({ message: EResponseMessage.PLACE_TAKEN });
+        return;
+      }
+    }
+
+    // Перевіряємо, чи email не зайнятий іншим користувачем
+    if (email !== userInfo.email) {
+      const existingEmail = await UserEntity.findOne({ email });
+      if (existingEmail) {
+        res.status(400).json({ message: EResponseMessage.EMAIL_TAKEN });
+        return;
+      }
+    }
+
+    // Оновлюємо дані користувача
+    const updatedUser = await UserEntity.findOneAndUpdate(
+      { id: ownerId },
+      {
+        placeName,
+        email,
+      },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      res.status(404).json({ message: EResponseMessage.USER_NOT_FOUND });
+      return;
+    }
+
+    res.status(200).json({
+      message: EResponseMessage.USER_UPDATED,
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        placeName: updatedUser.placeName,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const changeUserPlan = async (userId: string, planInfo: IPlan) => {
   if (!userId) {
     return { message: EResponseMessage.INVALID_CREDENTIALS, success: false };

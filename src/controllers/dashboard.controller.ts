@@ -29,6 +29,13 @@ export const getDetails = async (
       return;
     }
 
+    // Якщо статус вже complete, повертаємо дані без перевірки Stripe
+    if (userInfo.status === EStatus.complete) {
+      res.status(200).json({ user: userInfo });
+      return;
+    }
+
+    // Перевіряємо Stripe сесію тільки для pending статусу
     const session = await checkSession(userInfo.email);
 
     if (!session || session.payment_status === "unpaid") {
@@ -36,15 +43,14 @@ export const getDetails = async (
       return;
     }
 
-    let updatedUser;
-    updatedUser = userInfo;
+    let updatedUser = userInfo;
     if (session.metadata?.plan && session.metadata.plan !== userInfo.planName) {
       const changeResult = await changeUserPlan(ownerID, {
         planName: session.metadata.plan,
         status: EStatus.complete,
       });
 
-      if (!changeResult?.success) {
+      if (!changeResult?.success || !changeResult.updated) {
         res.status(400).json({ message: changeResult?.message });
         return;
       }
