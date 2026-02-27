@@ -10,6 +10,9 @@ import connectDB from "@/config/db";
 
 import cors from "cors";
 import fileUpload from "express-fileupload";
+import connectDB from "@/config/db";
+
+import cors from "cors";
 
 import express, { Application, json, urlencoded } from "express";
 
