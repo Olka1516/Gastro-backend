@@ -4,6 +4,8 @@ import { EResponseMessage } from "@/types/enums";
 import bcrypt from "bcryptjs";
 import { NextFunction, Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
+import jwt from "jsonwebtoken";
+import { IPlan } from "@/types/entities";
 
 export const register = async (
   req: Request,
@@ -102,4 +104,67 @@ export const login = async (
   } catch (error) {
     next(error);
   }
+};
+
+export const checkAuth = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+
+    if (!token) {
+      res.status(401).json({ message: EResponseMessage.TOKEN_MISSING });
+      return;
+    }
+
+    jwt.verify(
+      token,
+      process.env.JWT_SECRET as string,
+      async (err, decoded: any) => {
+        if (err) {
+          res.status(401).json({
+            message: EResponseMessage.TOKEN_INVALID,
+          });
+          return;
+        }
+
+        const user = await UserEntity.findOne({ id: decoded.id });
+        if (!user) {
+          res.status(401).json({
+            message: EResponseMessage.USER_NOT_FOUND,
+          });
+          return;
+        }
+
+        res.status(200).json({ user });
+      }
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const changeUserPlan = async (userId: string, planInfo: IPlan) => {
+  if (!userId) {
+    return { message: EResponseMessage.INVALID_CREDENTIALS, success: false };
+  }
+
+  const updated = await UserEntity.findOneAndUpdate(
+    { id: userId },
+    {
+      planName: planInfo.planName,
+      status: planInfo.status,
+      planDate: new Date(),
+    },
+    { new: true }
+  );
+
+  if (!updated) {
+    return { message: EResponseMessage.USER_NOT_FOUND, success: false };
+  }
+
+  return { updated, success: true };
 };

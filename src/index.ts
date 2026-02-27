@@ -1,14 +1,15 @@
-// import connectDB from "@/config/db";
+import dotenv from "dotenv";
+dotenv.config();
 import stripeRoutes from "@/routes/stripe.route";
 import userRoutes from "@/routes/user.route";
+import refreshRoutes from "@/routes/refresh.route";
+import dashboardRoutes from "@/routes/dashboard.route";
 import connectDB from "@/config/db";
 
 import cors from "cors";
-import dotenv from "dotenv";
 
 import express, { Application, json, urlencoded } from "express";
 
-dotenv.config();
 const port = process.env.PORT || 8000;
 const app: Application = express();
 const devMode = process.env.MODE === "dev";
@@ -31,6 +32,8 @@ app.use(
 
 app.use("/api/users", userRoutes);
 app.use("/api/stripe", stripeRoutes);
+app.use("/api/refresh", refreshRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 app.get("/", (req, res) => {
   res.status(200).json({ msg: "Server is up and running" });
