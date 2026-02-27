@@ -6,6 +6,8 @@ import refreshRoutes from "@/routes/refresh.route";
 import dashboardRoutes from "@/routes/dashboard.route";
 import connectDB from "@/config/db";
 import showcaseRoutes from "@/routes/showcase.route";
+import connectDB from "@/config/db";
+
 import cors from "cors";
 import fileUpload from "express-fileupload";
 
