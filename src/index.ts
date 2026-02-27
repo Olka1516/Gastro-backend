@@ -1,5 +1,7 @@
 // import connectDB from "@/config/db";
 import stripeRoutes from "@/routes/stripe.route";
+import userRoutes from "@/routes/user.route";
+import connectDB from "@/config/db";
 
 import cors from "cors";
 import dotenv from "dotenv";
@@ -11,7 +13,7 @@ const port = process.env.PORT || 8000;
 const app: Application = express();
 const devMode = process.env.MODE === "dev";
 
-// connectDB();
+connectDB();
 
 app.use(urlencoded({ extended: true }));
 app.use(json());
@@ -27,6 +29,7 @@ app.use(
   })
 );
 
+app.use("/api/users", userRoutes);
 app.use("/api/stripe", stripeRoutes);
 
 app.get("/", (req, res) => {
