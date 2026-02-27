@@ -1,5 +1,10 @@
 import { generateAccessToken, generateRefreshToken } from "@/config/jwt";
 import UserEntity from "@/entities/User.entity";
+import { IPlan } from "@/types/entities";
+import { EPlan, EResponseMessage, EStatus } from "@/types/enums";
+import bcrypt from "bcryptjs";
+import { NextFunction, Request, Response } from "express";
+import jwt from "jsonwebtoken";
 import { EResponseMessage } from "@/types/enums";
 import bcrypt from "bcryptjs";
 import { NextFunction, Request, Response } from "express";
@@ -142,6 +147,114 @@ export const checkAuth = async (
         res.status(200).json({ user });
       }
     );
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const putFreePlan = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user?.id) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+    const ownerID = req.user.id;
+    const userInfo = await UserEntity.findOne({ id: ownerID });
+    if (!userInfo) {
+      res.status(400).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    let changedData;
+    if (EPlan.free !== userInfo.planName) {
+      changedData = await changeUserPlan(ownerID, {
+        planName: EPlan.free,
+        status: EStatus.complete,
+      });
+
+      if (!changedData?.success) {
+        res.status(400).json({ message: changedData?.message });
+        return;
+      }
+    }
+
+    const user = changedData?.updated || userInfo;
+    res.status(200).json({ user });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateUser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const ownerId = req.user?.id;
+    if (!ownerId) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    const { placeName, email } = req.body;
+
+    if (!placeName || !email) {
+      res.status(400).json({ message: EResponseMessage.IS_REQUIRED });
+      return;
+    }
+
+    const userInfo = await UserEntity.findOne({ id: ownerId });
+    if (!userInfo) {
+      res.status(404).json({ message: EResponseMessage.USER_NOT_FOUND });
+      return;
+    }
+
+    // Перевіряємо, чи placeName не зайнятий іншим користувачем
+    if (placeName !== userInfo.placeName) {
+      const existingPlaceName = await UserEntity.findOne({ placeName });
+      if (existingPlaceName) {
+        res.status(400).json({ message: EResponseMessage.PLACE_TAKEN });
+        return;
+      }
+    }
+
+    // Перевіряємо, чи email не зайнятий іншим користувачем
+    if (email !== userInfo.email) {
+      const existingEmail = await UserEntity.findOne({ email });
+      if (existingEmail) {
+        res.status(400).json({ message: EResponseMessage.EMAIL_TAKEN });
+        return;
+      }
+    }
+
+    // Оновлюємо дані користувача
+    const updatedUser = await UserEntity.findOneAndUpdate(
+      { id: ownerId },
+      {
+        placeName,
+        email,
+      },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      res.status(404).json({ message: EResponseMessage.USER_NOT_FOUND });
+      return;
+    }
+
+    res.status(200).json({
+      message: EResponseMessage.USER_UPDATED,
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        placeName: updatedUser.placeName,
+      },
+    });
   } catch (error) {
     next(error);
   }

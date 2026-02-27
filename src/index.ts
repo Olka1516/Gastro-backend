@@ -5,6 +5,12 @@ import userRoutes from "@/routes/user.route";
 import refreshRoutes from "@/routes/refresh.route";
 import dashboardRoutes from "@/routes/dashboard.route";
 import connectDB from "@/config/db";
+import showcaseRoutes from "@/routes/showcase.route";
+import connectDB from "@/config/db";
+
+import cors from "cors";
+import fileUpload from "express-fileupload";
+import connectDB from "@/config/db";
 
 import cors from "cors";
 
@@ -18,6 +24,12 @@ connectDB();
 
 app.use(urlencoded({ extended: true }));
 app.use(json());
+app.use(
+  fileUpload({
+    useTempFiles: true,
+    tempFileDir: "/tmp/",
+  })
+);
 
 app.use(
   cors({
@@ -34,6 +46,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/stripe", stripeRoutes);
 app.use("/api/refresh", refreshRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/showcase", showcaseRoutes);
 
 app.get("/", (req, res) => {
   res.status(200).json({ msg: "Server is up and running" });
