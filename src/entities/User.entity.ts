@@ -19,7 +19,7 @@ const UserSchema: Schema = new Schema<IUser>({
     required: true,
     default: EPlan.free,
   },
-  planDate: { type: Date, required: true },
+  planDate: { type: Date, required: true, default: Date.now },
 });
 
 export default mongoose.model<IUser & Document>("User", UserSchema);

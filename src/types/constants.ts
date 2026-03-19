@@ -1,0 +1,1 @@
+export const FREE_PLAN_SHOWCASE_ITEMS_LIMIT = 20;
