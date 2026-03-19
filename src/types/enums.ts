@@ -28,6 +28,7 @@ export enum EResponseMessage {
   CATEGORY_NOT_FOUND = "categoryNotFound",
   CATEGORY_NAME_REQUIRED = "categoryNameRequired",
   CATEGORY_IN_USE = "categoryInUse",
+  FREE_PLAN_ITEMS_LIMIT = "freePlanItemsLimit",
 }
 
 export enum EPlan {

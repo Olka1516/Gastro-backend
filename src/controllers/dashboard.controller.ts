@@ -2,18 +2,32 @@ import cloudinary from "@/config/cloudinary";
 import CategoryEntity from "@/entities/Category.entity";
 import DishEntity from "@/entities/Dish.entity";
 import UserEntity from "@/entities/User.entity";
-import { EResponseMessage, EStatus } from "@/types/enums";
+import { EPlan, EResponseMessage, EStatus } from "@/types/enums";
 import { CloudinaryUploadResponse } from "@/types/express";
 import { NextFunction, Request, Response } from "express";
 import { UploadedFile } from "express-fileupload";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
 import { checkSession } from "./stripe.controller";
-import { EResponseMessage, EStatus } from "@/types/enums";
-import { NextFunction, Request, Response } from "express";
-import { checkSession } from "./stripe.controller";
-import UserEntity from "@/entities/User.entity";
 import { changeUserPlan } from "./user.controller";
+import { FREE_PLAN_SHOWCASE_ITEMS_LIMIT } from "@/types/constants";
+
+const isFreePlanLimitReached = async (ownerId: string): Promise<boolean> => {
+  const userInfo = await UserEntity.findOne({ id: ownerId });
+  if (!userInfo || userInfo.planName !== EPlan.free) {
+    return false;
+  }
+
+  const [dishesCount, categoryDoc] = await Promise.all([
+    DishEntity.countDocuments({ ownerId }),
+    CategoryEntity.findOne({ ownerId }),
+  ]);
+
+  const categoriesCount = categoryDoc?.categories?.length || 0;
+  const totalPositions = dishesCount + categoriesCount;
+
+  return totalPositions >= FREE_PLAN_SHOWCASE_ITEMS_LIMIT;
+};
 
 export const getDetails = async (
   req: Request,
@@ -27,24 +41,32 @@ export const getDetails = async (
       return;
     }
 
-    if (!req.user?.id) {
-      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
-      return;
-    }
-    const ownerID = req.user.id;
     const userInfo = await UserEntity.findOne({ id: ownerID });
     if (!userInfo) {
       res.status(400).json({ message: EResponseMessage.INVALID_CREDENTIALS });
       return;
     }
 
-    // Якщо статус вже complete, повертаємо дані без перевірки Stripe
+    if (userInfo.planName === EPlan.free && userInfo.status !== EStatus.complete) {
+      const changeResult = await changeUserPlan(ownerID, {
+        planName: EPlan.free,
+        status: EStatus.complete,
+      });
+
+      if (!changeResult?.success || !changeResult.updated) {
+        res.status(400).json({ message: changeResult?.message });
+        return;
+      }
+
+      res.status(200).json({ user: changeResult.updated });
+      return;
+    }
+
     if (userInfo.status === EStatus.complete) {
       res.status(200).json({ user: userInfo });
       return;
     }
 
-    // Перевіряємо Stripe сесію тільки для pending статусу
     const session = await checkSession(userInfo.email);
 
     if (!session || session.payment_status === "unpaid") {
@@ -102,19 +124,20 @@ export const createDish = async (
       return;
     }
 
+    if (await isFreePlanLimitReached(ownerId)) {
+      res.status(400).json({ message: EResponseMessage.FREE_PLAN_ITEMS_LIMIT });
+      return;
+    }
+
     let imageUrl = "";
 
-    // Якщо є зображення - завантажуємо в Cloudinary
     if (req.files?.image) {
       const imageFile = req.files.image as UploadedFile;
 
-      // Отримуємо Buffer з файлу
       let fileBuffer: Buffer;
       if (imageFile.tempFilePath) {
-        // Якщо файл збережений в тимчасовій директорії
         fileBuffer = fs.readFileSync(imageFile.tempFilePath);
       } else {
-        // Якщо файл в пам'яті
         fileBuffer = imageFile.data as Buffer;
       }
 
@@ -202,17 +225,13 @@ export const updateDish = async (
     if (category !== undefined) updateData.category = category;
     if (isAvailable !== undefined) updateData.isAvailable = isAvailable;
 
-    // Якщо є нове зображення - завантажуємо в Cloudinary
     if (req.files?.image) {
       const imageFile = req.files.image as UploadedFile;
 
-      // Отримуємо Buffer з файлу
       let fileBuffer: Buffer;
       if (imageFile.tempFilePath) {
-        // Якщо файл збережений в тимчасовій директорії
         fileBuffer = fs.readFileSync(imageFile.tempFilePath);
       } else {
-        // Якщо файл в пам'яті
         fileBuffer = imageFile.data as Buffer;
       }
 
@@ -241,17 +260,14 @@ export const updateDish = async (
 
       updateData.image = imageUpload.secure_url;
 
-      // Видаляємо старе зображення з Cloudinary, якщо воно існує
       if (existingDish.image) {
         try {
-          // Витягуємо public_id з URL
           const publicId = existingDish.image.split("/").pop()?.split(".")[0];
           if (publicId) {
             await cloudinary.uploader.destroy(`dishes/${publicId}`);
           }
         } catch (deleteError) {
           console.error("Error deleting old image:", deleteError);
-          // Не зупиняємо процес оновлення через помилку видалення старого зображення
         }
       }
     }
@@ -318,21 +334,17 @@ export const deleteDish = async (
       return;
     }
 
-    // Видаляємо зображення з Cloudinary, якщо воно існує
     if (existingDish.image) {
       try {
-        // Витягуємо public_id з URL
         const publicId = existingDish.image.split("/").pop()?.split(".")[0];
         if (publicId) {
           await cloudinary.uploader.destroy(`dishes/${publicId}`);
         }
       } catch (deleteError) {
         console.error("Error deleting image from Cloudinary:", deleteError);
-        // Не зупиняємо процес видалення через помилку видалення зображення
       }
     }
 
-    // Видаляємо страву з бази даних
     await DishEntity.findOneAndDelete({ id: dishId, ownerId });
 
     res.status(200).json({
@@ -357,7 +369,6 @@ export const getCategories = async (
 
     let categoryDoc = await CategoryEntity.findOne({ ownerId });
 
-    // Якщо документ не існує, створюємо новий
     if (!categoryDoc) {
       categoryDoc = await CategoryEntity.create({
         id: uuidv4(),
@@ -395,9 +406,13 @@ export const addCategory = async (
       return;
     }
 
+    if (await isFreePlanLimitReached(ownerId)) {
+      res.status(400).json({ message: EResponseMessage.FREE_PLAN_ITEMS_LIMIT });
+      return;
+    }
+
     let categoryDoc = await CategoryEntity.findOne({ ownerId });
 
-    // Якщо документ не існує, створюємо новий
     if (!categoryDoc) {
       categoryDoc = await CategoryEntity.create({
         id: uuidv4(),
@@ -406,7 +421,6 @@ export const addCategory = async (
       });
     }
 
-    // Перевіряємо, чи категорія з таким ім'ям вже існує
     const existingCategory = categoryDoc.categories.find(
       (cat) => cat.name.toLowerCase() === name.toLowerCase()
     );
@@ -416,7 +430,6 @@ export const addCategory = async (
       return;
     }
 
-    // Додаємо нову категорію
     const newCategory = {
       id: uuidv4(),
       name,
@@ -467,7 +480,6 @@ export const editCategory = async (
       return;
     }
 
-    // Знаходимо категорію за id
     const categoryIndex = categoryDoc.categories.findIndex(
       (cat) => cat.id === id
     );
@@ -476,7 +488,6 @@ export const editCategory = async (
       return;
     }
 
-    // Перевіряємо, чи категорія з таким ім'ям вже існує (крім поточної)
     const existingCategory = categoryDoc.categories.find(
       (cat) => cat.id !== id && cat.name.toLowerCase() === name.toLowerCase()
     );
@@ -486,7 +497,6 @@ export const editCategory = async (
       return;
     }
 
-    // Оновлюємо категорію
     categoryDoc.categories[categoryIndex].name = name;
     await categoryDoc.save();
 
@@ -524,7 +534,6 @@ export const deleteCategory = async (
       return;
     }
 
-    // Знаходимо категорію за id
     const categoryIndex = categoryDoc.categories.findIndex(
       (cat) => cat.id === id
     );
@@ -535,7 +544,6 @@ export const deleteCategory = async (
 
     const categoryToDelete = categoryDoc.categories[categoryIndex];
 
-    // Перевіряємо, чи є страви, які використовують цю категорію
     const dishesWithCategory = await DishEntity.find({
       ownerId,
       category: categoryToDelete.id,
@@ -548,31 +556,12 @@ export const deleteCategory = async (
       return;
     }
 
-    // Видаляємо категорію з масиву
     categoryDoc.categories.splice(categoryIndex, 1);
     await categoryDoc.save();
 
     res.status(200).json({
       message: EResponseMessage.CATEGORY_DELETED,
     });
-    let changedData;
-    if (userInfo.status === EStatus.pending) {
-      const checkSessionResult = await checkSession(userInfo.email);
-      if (checkSessionResult !== "unpaid") {
-        changedData = await changeUserPlan(ownerID, {
-          planName: userInfo.planName,
-          status: EStatus.complete,
-        });
-
-        if (!changedData?.success) {
-          res.status(400).json({ message: changedData?.message });
-          return;
-        }
-      }
-    }
-
-    const user = changedData?.updated || userInfo;
-    res.status(200).json({ user });
   } catch (error) {
     next(error);
   }
