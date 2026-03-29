@@ -29,6 +29,8 @@ export enum EResponseMessage {
   CATEGORY_NAME_REQUIRED = "categoryNameRequired",
   CATEGORY_IN_USE = "categoryInUse",
   FREE_PLAN_ITEMS_LIMIT = "freePlanItemsLimit",
+  PLAN_COLORS_NOT_AVAILABLE = "planColorsNotAvailable",
+  INVALID_COLOR = "invalidColor",
 }
 
 export enum EPlan {
