@@ -1,11 +1,17 @@
+import cloudinary from "@/config/cloudinary";
 import { generateAccessToken, generateRefreshToken } from "@/config/jwt";
 import UserEntity from "@/entities/User.entity";
-import { IPlan } from "@/types/entities";
+import { IPlan, IUpdatedUser } from "@/types/entities";
 import { EPlan, EResponseMessage, EStatus } from "@/types/enums";
+import { CloudinaryUploadResponse } from "@/types/express";
 import bcrypt from "bcryptjs";
 import { NextFunction, Request, Response } from "express";
+import { UploadedFile } from "express-fileupload";
 import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from "uuid";
+import fs from "fs";
+
+const HEX_COLOR_REGEX = /^#(?:[0-9a-fA-F]{3}){1,2}$/;
 
 export const register = async (
   req: Request,
@@ -196,7 +202,7 @@ export const updateUser = async (
       return;
     }
 
-    const { placeName, email } = req.body;
+    const { placeName, email, menuIconColor, menuBackgroundColor } = req.body;
 
     if (!placeName || !email) {
       res.status(400).json({ message: EResponseMessage.IS_REQUIRED });
@@ -209,7 +215,6 @@ export const updateUser = async (
       return;
     }
 
-    // Перевіряємо, чи placeName не зайнятий іншим користувачем
     if (placeName !== userInfo.placeName) {
       const existingPlaceName = await UserEntity.findOne({ placeName });
       if (existingPlaceName) {
@@ -218,7 +223,6 @@ export const updateUser = async (
       }
     }
 
-    // Перевіряємо, чи email не зайнятий іншим користувачем
     if (email !== userInfo.email) {
       const existingEmail = await UserEntity.findOne({ email });
       if (existingEmail) {
@@ -227,13 +231,84 @@ export const updateUser = async (
       }
     }
 
-    // Оновлюємо дані користувача
+    const hasMenuColors =
+      menuIconColor !== undefined || menuBackgroundColor !== undefined;
+
+    if (
+      hasMenuColors &&
+      ![EPlan.standart, EPlan.premium].includes(userInfo.planName as EPlan)
+    ) {
+      res.status(400).json({ message: EResponseMessage.PLAN_COLORS_NOT_AVAILABLE });
+      return;
+    }
+
+    const updateData: IUpdatedUser = { placeName, email };
+
+    if (menuIconColor !== undefined) {
+      if (
+        typeof menuIconColor !== "string" ||
+        !HEX_COLOR_REGEX.test(menuIconColor)
+      ) {
+        res.status(400).json({ message: EResponseMessage.INVALID_COLOR });
+        return;
+      }
+      updateData.menuIconColor = menuIconColor;
+    }
+
+    if (menuBackgroundColor !== undefined) {
+      if (
+        typeof menuBackgroundColor !== "string" ||
+        !HEX_COLOR_REGEX.test(menuBackgroundColor)
+      ) {
+        res.status(400).json({ message: EResponseMessage.INVALID_COLOR });
+        return;
+      }
+      updateData.menuBackgroundColor = menuBackgroundColor;
+    }
+
+    let imageUrl = "";
+
+    if (req.files?.logo) {
+      const imageFile = req.files.logo as UploadedFile;
+
+      let fileBuffer: Buffer;
+      if (imageFile.tempFilePath) {
+        fileBuffer = fs.readFileSync(imageFile.tempFilePath);
+      } else {
+        fileBuffer = imageFile.data as Buffer;
+      }
+
+      const uploadResult = await new Promise<CloudinaryUploadResponse>(
+        (resolve, reject) => {
+          cloudinary.uploader
+            .upload_stream(
+              {
+                folder: "users",
+                transformation: [
+                  { width: 800, height: 600, crop: "limit" },
+                  { quality: "auto" },
+                ],
+              },
+              (error, uploadResult) => {
+                if (error) {
+                  reject(error);
+                } else {
+                  resolve(uploadResult as CloudinaryUploadResponse);
+                }
+              }
+            )
+            .end(fileBuffer);
+        }
+      );
+
+      imageUrl = uploadResult.secure_url;
+    }
+
+    updateData.logo = imageUrl
+
     const updatedUser = await UserEntity.findOneAndUpdate(
       { id: ownerId },
-      {
-        placeName,
-        email,
-      },
+      updateData,
       { new: true }
     );
 
@@ -248,6 +323,9 @@ export const updateUser = async (
         id: updatedUser.id,
         email: updatedUser.email,
         placeName: updatedUser.placeName,
+        menuIconColor: updatedUser.menuIconColor,
+        menuBackgroundColor: updatedUser.menuBackgroundColor,
+        logo: updatedUser.logo,
       },
     });
   } catch (error) {

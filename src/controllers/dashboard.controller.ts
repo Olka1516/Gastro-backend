@@ -2,6 +2,7 @@ import cloudinary from "@/config/cloudinary";
 import CategoryEntity from "@/entities/Category.entity";
 import DishEntity from "@/entities/Dish.entity";
 import UserEntity from "@/entities/User.entity";
+import { FREE_PLAN_SHOWCASE_ITEMS_LIMIT } from "@/types/constants";
 import { EPlan, EResponseMessage, EStatus } from "@/types/enums";
 import { CloudinaryUploadResponse } from "@/types/express";
 import { NextFunction, Request, Response } from "express";
@@ -10,23 +11,26 @@ import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
 import { checkSession } from "./stripe.controller";
 import { changeUserPlan } from "./user.controller";
-import { FREE_PLAN_SHOWCASE_ITEMS_LIMIT } from "@/types/constants";
 
-const isFreePlanLimitReached = async (ownerId: string): Promise<boolean> => {
+const isFreeDishLimitReached = async (ownerId: string): Promise<boolean> => {
   const userInfo = await UserEntity.findOne({ id: ownerId });
   if (!userInfo || userInfo.planName !== EPlan.free) {
     return false;
   }
 
-  const [dishesCount, categoryDoc] = await Promise.all([
-    DishEntity.countDocuments({ ownerId }),
-    CategoryEntity.findOne({ ownerId }),
-  ]);
+  const dishesCount = await DishEntity.countDocuments({ ownerId });
+  return dishesCount >= FREE_PLAN_SHOWCASE_ITEMS_LIMIT;
+};
 
+const isFreeCategoryLimitReached = async (ownerId: string): Promise<boolean> => {
+  const userInfo = await UserEntity.findOne({ id: ownerId });
+  if (!userInfo || userInfo.planName !== EPlan.free) {
+    return false;
+  }
+
+  const categoryDoc = await CategoryEntity.findOne({ ownerId });
   const categoriesCount = categoryDoc?.categories?.length || 0;
-  const totalPositions = dishesCount + categoriesCount;
-
-  return totalPositions >= FREE_PLAN_SHOWCASE_ITEMS_LIMIT;
+  return categoriesCount >= FREE_PLAN_SHOWCASE_ITEMS_LIMIT;
 };
 
 export const getDetails = async (
@@ -124,7 +128,7 @@ export const createDish = async (
       return;
     }
 
-    if (await isFreePlanLimitReached(ownerId)) {
+    if (await isFreeDishLimitReached(ownerId)) {
       res.status(400).json({ message: EResponseMessage.FREE_PLAN_ITEMS_LIMIT });
       return;
     }
@@ -406,7 +410,7 @@ export const addCategory = async (
       return;
     }
 
-    if (await isFreePlanLimitReached(ownerId)) {
+    if (await isFreeCategoryLimitReached(ownerId)) {
       res.status(400).json({ message: EResponseMessage.FREE_PLAN_ITEMS_LIMIT });
       return;
     }

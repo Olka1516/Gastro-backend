@@ -6,6 +6,17 @@ export interface IUser {
   email: string;
   password: string;
   id: string;
+  menuIconColor?: string;
+  logo?: string;
+  menuBackgroundColor?: string;
+}
+
+export interface IUpdatedUser {
+  placeName: string;
+  email: string;
+  menuIconColor?: string;
+  menuBackgroundColor?: string;
+  logo?: string;
 }
 
 export interface IPlan {
@@ -35,4 +46,4 @@ export interface ICategory {
   categories: ICategoryItem[];
 }
 
-export interface ITokenUserData extends Pick<IUser, "email" | "id"> {}
+export interface ITokenUserData extends Pick<IUser, "email" | "id"> { }

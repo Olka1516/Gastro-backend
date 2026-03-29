@@ -1,6 +1,6 @@
+import { EPlan, EStatus } from "@/types/enums";
 import mongoose, { Schema } from "mongoose";
 import { IUser } from "../types/entities";
-import { EPlan, EStatus } from "@/types/enums";
 
 const UserSchema: Schema = new Schema<IUser>({
   placeName: { type: String, required: true },
@@ -20,6 +20,9 @@ const UserSchema: Schema = new Schema<IUser>({
     default: EPlan.free,
   },
   planDate: { type: Date, required: true, default: Date.now },
+  menuIconColor: { type: String, default: "" },
+  logo: { type: String, default: "" },
+  menuBackgroundColor: { type: String, default: "" },
 });
 
 export default mongoose.model<IUser & Document>("User", UserSchema);
