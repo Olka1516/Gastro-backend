@@ -9,7 +9,10 @@ import { NextFunction, Request, Response } from "express";
 import { UploadedFile } from "express-fileupload";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
-import { checkSession } from "./stripe.controller";
+import {
+  checkSession,
+  isCheckoutSessionInvalidated,
+} from "./stripe.controller";
 import { changeUserPlan } from "./user.controller";
 
 const isFreeDishLimitReached = async (ownerId: string): Promise<boolean> => {
@@ -22,7 +25,9 @@ const isFreeDishLimitReached = async (ownerId: string): Promise<boolean> => {
   return dishesCount >= FREE_PLAN_SHOWCASE_ITEMS_LIMIT;
 };
 
-const isFreeCategoryLimitReached = async (ownerId: string): Promise<boolean> => {
+const isFreeCategoryLimitReached = async (
+  ownerId: string,
+): Promise<boolean> => {
   const userInfo = await UserEntity.findOne({ id: ownerId });
   if (!userInfo || userInfo.planName !== EPlan.free) {
     return false;
@@ -36,7 +41,7 @@ const isFreeCategoryLimitReached = async (ownerId: string): Promise<boolean> => 
 export const getDetails = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const ownerID = req.user?.id;
@@ -51,7 +56,19 @@ export const getDetails = async (
       return;
     }
 
-    if (userInfo.planName === EPlan.free && userInfo.status !== EStatus.complete) {
+    if (userInfo.status === EStatus.complete) {
+      res.status(200).json({ user: userInfo });
+      return;
+    }
+
+    const session = await checkSession(userInfo.email, userInfo.planDate);
+
+    if (!session) {
+      res.status(400).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    if (isCheckoutSessionInvalidated(session)) {
       const changeResult = await changeUserPlan(ownerID, {
         planName: EPlan.free,
         status: EStatus.complete,
@@ -66,14 +83,7 @@ export const getDetails = async (
       return;
     }
 
-    if (userInfo.status === EStatus.complete) {
-      res.status(200).json({ user: userInfo });
-      return;
-    }
-
-    const session = await checkSession(userInfo.email);
-
-    if (!session || session.payment_status === "unpaid") {
+    if (session.payment_status !== "paid") {
       res.status(400).json({ message: EResponseMessage.INVALID_CREDENTIALS });
       return;
     }
@@ -82,6 +92,18 @@ export const getDetails = async (
     if (session.metadata?.plan && session.metadata.plan !== userInfo.planName) {
       const changeResult = await changeUserPlan(ownerID, {
         planName: session.metadata.plan,
+        status: EStatus.complete,
+      });
+
+      if (!changeResult?.success || !changeResult.updated) {
+        res.status(400).json({ message: changeResult?.message });
+        return;
+      }
+
+      updatedUser = changeResult.updated;
+    } else {
+      const changeResult = await changeUserPlan(ownerID, {
+        planName: userInfo.planName,
         status: EStatus.complete,
       });
 
@@ -102,7 +124,7 @@ export const getDetails = async (
 export const createDish = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const ownerId = req.user?.id;
@@ -162,10 +184,10 @@ export const createDish = async (
                 } else {
                   resolve(uploadResult as CloudinaryUploadResponse);
                 }
-              }
+              },
             )
             .end(fileBuffer);
-        }
+        },
       );
 
       imageUrl = uploadResult.secure_url;
@@ -194,7 +216,7 @@ export const createDish = async (
 export const updateDish = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const ownerId = req.user?.id;
@@ -256,10 +278,10 @@ export const updateDish = async (
                 } else {
                   resolve(uploadResult as CloudinaryUploadResponse);
                 }
-              }
+              },
             )
             .end(fileBuffer);
-        }
+        },
       );
 
       updateData.image = imageUpload.secure_url;
@@ -279,7 +301,7 @@ export const updateDish = async (
     const updatedDish = await DishEntity.findOneAndUpdate(
       { id: dishId, ownerId },
       updateData,
-      { new: true }
+      { new: true },
     );
 
     res.status(200).json({
@@ -294,7 +316,7 @@ export const updateDish = async (
 export const getDishes = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const ownerId = req.user?.id;
@@ -316,7 +338,7 @@ export const getDishes = async (
 export const deleteDish = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const ownerId = req.user?.id;
@@ -362,7 +384,7 @@ export const deleteDish = async (
 export const getCategories = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const ownerId = req.user?.id;
@@ -392,7 +414,7 @@ export const getCategories = async (
 export const addCategory = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const ownerId = req.user?.id;
@@ -426,7 +448,7 @@ export const addCategory = async (
     }
 
     const existingCategory = categoryDoc.categories.find(
-      (cat) => cat.name.toLowerCase() === name.toLowerCase()
+      (cat) => cat.name.toLowerCase() === name.toLowerCase(),
     );
 
     if (existingCategory) {
@@ -454,7 +476,7 @@ export const addCategory = async (
 export const editCategory = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const ownerId = req.user?.id;
@@ -485,7 +507,7 @@ export const editCategory = async (
     }
 
     const categoryIndex = categoryDoc.categories.findIndex(
-      (cat) => cat.id === id
+      (cat) => cat.id === id,
     );
     if (categoryIndex === -1) {
       res.status(404).json({ message: EResponseMessage.CATEGORY_NOT_FOUND });
@@ -493,7 +515,7 @@ export const editCategory = async (
     }
 
     const existingCategory = categoryDoc.categories.find(
-      (cat) => cat.id !== id && cat.name.toLowerCase() === name.toLowerCase()
+      (cat) => cat.id !== id && cat.name.toLowerCase() === name.toLowerCase(),
     );
 
     if (existingCategory) {
@@ -516,7 +538,7 @@ export const editCategory = async (
 export const deleteCategory = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const ownerId = req.user?.id;
@@ -539,7 +561,7 @@ export const deleteCategory = async (
     }
 
     const categoryIndex = categoryDoc.categories.findIndex(
-      (cat) => cat.id === id
+      (cat) => cat.id === id,
     );
     if (categoryIndex === -1) {
       res.status(404).json({ message: EResponseMessage.CATEGORY_NOT_FOUND });

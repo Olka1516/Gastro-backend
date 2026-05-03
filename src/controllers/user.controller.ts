@@ -1,5 +1,6 @@
 import cloudinary from "@/config/cloudinary";
 import { generateAccessToken, generateRefreshToken } from "@/config/jwt";
+import { invalidateCheckoutSessionsForEmail } from "@/controllers/stripe.controller";
 import UserEntity from "@/entities/User.entity";
 import { IPlan, IUpdatedUser } from "@/types/entities";
 import { EPlan, EResponseMessage, EStatus } from "@/types/enums";
@@ -16,7 +17,7 @@ const HEX_COLOR_REGEX = /^#(?:[0-9a-fA-F]{3}){1,2}$/;
 export const register = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const { email, password, placeName } = req.body;
@@ -75,7 +76,7 @@ export const register = async (
 export const login = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const { email, password } = req.body;
@@ -115,7 +116,7 @@ export const login = async (
 export const checkAuth = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const authHeader = req.headers["authorization"];
@@ -146,7 +147,7 @@ export const checkAuth = async (
         }
 
         res.status(200).json({ user });
-      }
+      },
     );
   } catch (error) {
     next(error);
@@ -156,7 +157,7 @@ export const checkAuth = async (
 export const putFreePlan = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     if (!req.user?.id) {
@@ -170,21 +171,29 @@ export const putFreePlan = async (
       return;
     }
 
-    let changedData;
-    if (EPlan.free !== userInfo.planName) {
-      changedData = await changeUserPlan(ownerID, {
-        planName: EPlan.free,
-        status: EStatus.complete,
-      });
+    try {
+      await invalidateCheckoutSessionsForEmail(userInfo.email);
+    } finally {
+      const needsSync =
+        userInfo.planName !== EPlan.free ||
+        userInfo.status !== EStatus.complete;
 
-      if (!changedData?.success) {
-        res.status(400).json({ message: changedData?.message });
-        return;
+      let changedData;
+      if (needsSync) {
+        changedData = await changeUserPlan(ownerID, {
+          planName: EPlan.free,
+          status: EStatus.complete,
+        });
+
+        if (!changedData?.success) {
+          res.status(400).json({ message: changedData?.message });
+          return;
+        }
       }
-    }
 
-    const user = changedData?.updated || userInfo;
-    res.status(200).json({ user });
+      const user = changedData?.updated || userInfo;
+      res.status(200).json({ user });
+    }
   } catch (error) {
     next(error);
   }
@@ -193,7 +202,7 @@ export const putFreePlan = async (
 export const updateUser = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const ownerId = req.user?.id;
@@ -238,7 +247,9 @@ export const updateUser = async (
       hasMenuColors &&
       ![EPlan.standart, EPlan.premium].includes(userInfo.planName as EPlan)
     ) {
-      res.status(400).json({ message: EResponseMessage.PLAN_COLORS_NOT_AVAILABLE });
+      res
+        .status(400)
+        .json({ message: EResponseMessage.PLAN_COLORS_NOT_AVAILABLE });
       return;
     }
 
@@ -295,21 +306,20 @@ export const updateUser = async (
                 } else {
                   resolve(uploadResult as CloudinaryUploadResponse);
                 }
-              }
+              },
             )
             .end(fileBuffer);
-        }
+        },
       );
 
       imageUrl = uploadResult.secure_url;
+      updateData.logo = imageUrl;
     }
-
-    updateData.logo = imageUrl
 
     const updatedUser = await UserEntity.findOneAndUpdate(
       { id: ownerId },
       updateData,
-      { new: true }
+      { new: true },
     );
 
     if (!updatedUser) {
@@ -338,14 +348,18 @@ export const changeUserPlan = async (userId: string, planInfo: IPlan) => {
     return { message: EResponseMessage.INVALID_CREDENTIALS, success: false };
   }
 
+  const updateFields: Record<string, string | Date> = {
+    planName: planInfo.planName,
+    status: planInfo.status,
+  };
+  if (planInfo.status !== EStatus.pending) {
+    updateFields.planDate = new Date();
+  }
+
   const updated = await UserEntity.findOneAndUpdate(
     { id: userId },
-    {
-      planName: planInfo.planName,
-      status: planInfo.status,
-      planDate: new Date(),
-    },
-    { new: true }
+    updateFields,
+    { new: true },
   );
 
   if (!updated) {

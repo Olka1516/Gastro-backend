@@ -11,7 +11,7 @@ const UserSchema: Schema = new Schema<IUser>({
     type: String,
     enum: Object.values(EStatus),
     required: true,
-    default: EStatus.pending,
+    default: EStatus.complete,
   },
   planName: {
     type: String,

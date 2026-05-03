@@ -4,17 +4,18 @@ import UserEntity from "@/entities/User.entity";
 import { FREE_PLAN_SHOWCASE_ITEMS_LIMIT } from "@/types/constants";
 import { EPlan, EResponseMessage, EStatus } from "@/types/enums";
 import { NextFunction, Request, Response } from "express";
-import { checkSession } from "./stripe.controller";
+import { checkSession, isCheckoutSessionInvalidated } from "./stripe.controller";
 
 export const getPlanStatus = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const rawPlaceName = req.params.placeName;
-    const placeName = rawPlaceName ? decodeURIComponent(rawPlaceName).trim() : "";
-
+    const placeName = rawPlaceName
+      ? decodeURIComponent(rawPlaceName).trim()
+      : "";
 
     if (!placeName) {
       res.status(400).json({ message: EResponseMessage.IS_REQUIRED });
@@ -27,7 +28,10 @@ export const getPlanStatus = async (
       return;
     }
 
-    if (userInfo.planName === EPlan.free || userInfo.status === EStatus.complete) {
+    if (
+      userInfo.planName === EPlan.free ||
+      userInfo.status === EStatus.complete
+    ) {
       res.status(200).json({
         status: true,
         planName: userInfo.planName,
@@ -36,8 +40,38 @@ export const getPlanStatus = async (
       return;
     }
 
-    const session = await checkSession(userInfo.email);
-    if (!session || session.payment_status === "unpaid") {
+    const session = await checkSession(userInfo.email, userInfo.planDate);
+
+    if (!session) {
+      res.status(400).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    if (isCheckoutSessionInvalidated(session)) {
+      res.status(200).json({
+        status: true,
+        planName: EPlan.free,
+        placeName,
+      });
+      return;
+    }
+
+    if (session.payment_status === "unpaid") {
+      res.status(200).json({
+        status: true,
+        planName: userInfo.planName,
+        placeName,
+        checkoutSession: {
+          id: session.id,
+          url: session.url ?? undefined,
+          status: session.status,
+          payment_status: session.payment_status,
+        },
+      });
+      return;
+    }
+
+    if (session.payment_status !== "paid") {
       res.status(400).json({ message: EResponseMessage.INVALID_CREDENTIALS });
       return;
     }
@@ -55,11 +89,13 @@ export const getPlanStatus = async (
 export const getDishes = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const rawPlaceName = req.params.placeName;
-    const placeName = rawPlaceName ? decodeURIComponent(rawPlaceName).trim() : "";
+    const placeName = rawPlaceName
+      ? decodeURIComponent(rawPlaceName).trim()
+      : "";
     if (!placeName) {
       res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
       return;
@@ -95,11 +131,13 @@ export const getDishes = async (
 export const getCategories = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const rawPlaceName = req.params.placeName;
-    const placeName = rawPlaceName ? decodeURIComponent(rawPlaceName).trim() : "";
+    const placeName = rawPlaceName
+      ? decodeURIComponent(rawPlaceName).trim()
+      : "";
     if (!placeName) {
       res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
       return;
