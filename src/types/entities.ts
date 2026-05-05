@@ -47,3 +47,32 @@ export interface ICategory {
 }
 
 export interface ITokenUserData extends Pick<IUser, "email" | "id"> { }
+
+export interface IShowcaseOrderLine {
+  dishId: string;
+  quantity: number;
+  unitPrice: number;
+  name: string;
+  categoryName: string;
+}
+
+export interface IShowcaseOrderCustomer {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  /** May be omitted on input; stored as "" if empty. */
+  email?: string;
+  address: string;
+  deliveryTime?: string;
+  comment?: string;
+}
+
+export interface IShowcaseOrder {
+  id: string;
+  ownerId: string;
+  placeName: string;
+  status: string;
+  customer: IShowcaseOrderCustomer;
+  lines: IShowcaseOrderLine[];
+  total: number;
+}

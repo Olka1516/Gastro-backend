@@ -1,9 +1,16 @@
 import cloudinary from "@/config/cloudinary";
 import CategoryEntity from "@/entities/Category.entity";
 import DishEntity from "@/entities/Dish.entity";
+import ShowcaseOrderEntity from "@/entities/ShowcaseOrder.entity";
 import UserEntity from "@/entities/User.entity";
 import { FREE_PLAN_SHOWCASE_ITEMS_LIMIT } from "@/types/constants";
-import { EPlan, EResponseMessage, EStatus } from "@/types/enums";
+import { IShowcaseOrderCustomer, IShowcaseOrderLine } from "@/types/entities";
+import {
+  EPlan,
+  EResponseMessage,
+  EShowcaseOrderStatus,
+  EStatus,
+} from "@/types/enums";
 import { CloudinaryUploadResponse } from "@/types/express";
 import { NextFunction, Request, Response } from "express";
 import { UploadedFile } from "express-fileupload";
@@ -25,6 +32,23 @@ const isFreeDishLimitReached = async (ownerId: string): Promise<boolean> => {
   return dishesCount >= FREE_PLAN_SHOWCASE_ITEMS_LIMIT;
 };
 
+const showcaseOrderCustomerForApi = (c: IShowcaseOrderCustomer) => ({
+  firstName: c.firstName,
+  lastName: c.lastName,
+  phone: c.phone,
+  email: c.email ?? "",
+  address: c.address,
+  deliveryTime: c.deliveryTime ?? "",
+  comment: c.comment ?? "",
+});
+
+const SHOWCASE_ORDER_STATUS_LIST = Object.values(EShowcaseOrderStatus);
+
+const isShowcaseOrderStatus = (
+  v: string,
+): v is EShowcaseOrderStatus =>
+  (SHOWCASE_ORDER_STATUS_LIST as string[]).includes(v);
+
 const isFreeCategoryLimitReached = async (
   ownerId: string,
 ): Promise<boolean> => {
@@ -36,6 +60,80 @@ const isFreeCategoryLimitReached = async (
   const categoryDoc = await CategoryEntity.findOne({ ownerId });
   const categoriesCount = categoryDoc?.categories?.length || 0;
   return categoriesCount >= FREE_PLAN_SHOWCASE_ITEMS_LIMIT;
+};
+
+export const getShowcaseOrdersForOwner = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const ownerId = req.user?.id;
+    if (!ownerId) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    const statusRaw = req.query.status;
+    const statusParam =
+      typeof statusRaw === "string"
+        ? statusRaw.trim()
+        : Array.isArray(statusRaw) && typeof statusRaw[0] === "string"
+          ? statusRaw[0].trim()
+          : "";
+
+    let statusFilter: EShowcaseOrderStatus | undefined;
+    if (statusParam !== "" && statusParam !== "all") {
+      if (!isShowcaseOrderStatus(statusParam)) {
+        res
+          .status(400)
+          .json({ message: EResponseMessage.SHOWCASE_ORDER_INVALID_STATUS });
+        return;
+      }
+      statusFilter = statusParam;
+    }
+
+    const query: { ownerId: string; status?: EShowcaseOrderStatus } = {
+      ownerId,
+    };
+    if (statusFilter !== undefined) {
+      query.status = statusFilter;
+    }
+
+    const docs = await ShowcaseOrderEntity.find(query)
+      .sort({ createdAt: -1 })
+      .lean()
+      .exec();
+
+    const orders = docs.map((doc) => {
+      const createdAtRaw = (doc as { createdAt?: Date }).createdAt;
+      let createdAt: string | undefined;
+      if (createdAtRaw instanceof Date) {
+        createdAt = createdAtRaw.toISOString();
+      }
+
+      const lines = doc.lines as IShowcaseOrderLine[];
+      const statusVal = doc.status as string;
+      const status = isShowcaseOrderStatus(statusVal)
+        ? statusVal
+        : EShowcaseOrderStatus.pending;
+
+      return {
+        id: doc.id as string,
+        status,
+        ...(createdAt !== undefined ? { createdAt } : {}),
+        total: doc.total as number,
+        customer: showcaseOrderCustomerForApi(
+          doc.customer as IShowcaseOrderCustomer,
+        ),
+        lines,
+      };
+    });
+
+    res.status(200).json({ orders });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const getDetails = async (

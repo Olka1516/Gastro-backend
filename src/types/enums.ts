@@ -31,6 +31,13 @@ export enum EResponseMessage {
   FREE_PLAN_ITEMS_LIMIT = "freePlanItemsLimit",
   PLAN_COLORS_NOT_AVAILABLE = "planColorsNotAvailable",
   INVALID_COLOR = "invalidColor",
+  SHOWCASE_ORDERING_NOT_AVAILABLE = "showcaseOrderingNotAvailable",
+  SHOWCASE_ORDER_INVALID_BODY = "showcaseOrderInvalidBody",
+  SHOWCASE_ORDER_DISH_INVALID = "showcaseOrderDishInvalid",
+  SHOWCASE_ORDER_TOTAL_MISMATCH = "showcaseOrderTotalMismatch",
+  SHOWCASE_ORDER_PRICE_MISMATCH = "showcaseOrderPriceMismatch",
+  SHOWCASE_ORDER_RATE_LIMIT = "showcaseOrderRateLimit",
+  SHOWCASE_ORDER_INVALID_STATUS = "showcaseOrderInvalidStatus",
 }
 
 export enum EPlan {
@@ -43,5 +50,12 @@ export enum EStatus {
   pending = "pending",
   complete = "complete",
   error = "error",
+  cancelled = "cancelled",
+}
+
+export enum EShowcaseOrderStatus {
+  pending = "pending",
+  confirmed = "confirmed",
+  completed = "completed",
   cancelled = "cancelled",
 }
