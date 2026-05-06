@@ -38,6 +38,7 @@ export enum EResponseMessage {
   SHOWCASE_ORDER_PRICE_MISMATCH = "showcaseOrderPriceMismatch",
   SHOWCASE_ORDER_RATE_LIMIT = "showcaseOrderRateLimit",
   SHOWCASE_ORDER_INVALID_STATUS = "showcaseOrderInvalidStatus",
+  SHOWCASE_ORDER_NOT_FOUND = "showcaseOrderNotFound",
 }
 
 export enum EPlan {

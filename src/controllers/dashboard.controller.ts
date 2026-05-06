@@ -49,6 +49,34 @@ const isShowcaseOrderStatus = (
 ): v is EShowcaseOrderStatus =>
   (SHOWCASE_ORDER_STATUS_LIST as string[]).includes(v);
 
+const showcaseOrderDocToApi = (doc: {
+  id: string;
+  status?: string;
+  total: number;
+  customer: IShowcaseOrderCustomer;
+  lines: IShowcaseOrderLine[];
+  createdAt?: Date;
+}) => {
+  const createdAtRaw = doc.createdAt;
+  let createdAt: string | undefined;
+  if (createdAtRaw instanceof Date) {
+    createdAt = createdAtRaw.toISOString();
+  }
+  const statusVal = doc.status ?? "";
+  const status = isShowcaseOrderStatus(statusVal)
+    ? statusVal
+    : EShowcaseOrderStatus.pending;
+
+  return {
+    id: doc.id,
+    status,
+    ...(createdAt !== undefined ? { createdAt } : {}),
+    total: doc.total,
+    customer: showcaseOrderCustomerForApi(doc.customer),
+    lines: doc.lines,
+  };
+};
+
 const isFreeCategoryLimitReached = async (
   ownerId: string,
 ): Promise<boolean> => {
@@ -105,32 +133,90 @@ export const getShowcaseOrdersForOwner = async (
       .lean()
       .exec();
 
-    const orders = docs.map((doc) => {
-      const createdAtRaw = (doc as { createdAt?: Date }).createdAt;
-      let createdAt: string | undefined;
-      if (createdAtRaw instanceof Date) {
-        createdAt = createdAtRaw.toISOString();
-      }
-
-      const lines = doc.lines as IShowcaseOrderLine[];
-      const statusVal = doc.status as string;
-      const status = isShowcaseOrderStatus(statusVal)
-        ? statusVal
-        : EShowcaseOrderStatus.pending;
-
-      return {
+    const orders = docs.map((doc) =>
+      showcaseOrderDocToApi({
         id: doc.id as string,
-        status,
-        ...(createdAt !== undefined ? { createdAt } : {}),
+        status: doc.status as string | undefined,
         total: doc.total as number,
-        customer: showcaseOrderCustomerForApi(
-          doc.customer as IShowcaseOrderCustomer,
-        ),
-        lines,
-      };
-    });
+        customer: doc.customer as IShowcaseOrderCustomer,
+        lines: doc.lines as IShowcaseOrderLine[],
+        createdAt: (doc as { createdAt?: Date }).createdAt,
+      }),
+    );
 
     res.status(200).json({ orders });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const patchShowcaseOrderStatus = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const ownerId = req.user?.id;
+    if (!ownerId) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
+      return;
+    }
+
+    const orderId = req.params.orderId?.trim();
+    if (!orderId) {
+      res.status(400).json({ message: EResponseMessage.IS_REQUIRED });
+      return;
+    }
+
+    const body = req.body as Record<string, unknown> | undefined;
+    if (!body || typeof body !== "object") {
+      res
+        .status(400)
+        .json({ message: EResponseMessage.SHOWCASE_ORDER_INVALID_BODY });
+      return;
+    }
+
+    const rawStatus = body.status;
+    if (typeof rawStatus !== "string") {
+      res
+        .status(400)
+        .json({ message: EResponseMessage.SHOWCASE_ORDER_INVALID_BODY });
+      return;
+    }
+
+    const nextStatus = rawStatus.trim();
+    if (!isShowcaseOrderStatus(nextStatus)) {
+      res
+        .status(400)
+        .json({ message: EResponseMessage.SHOWCASE_ORDER_INVALID_STATUS });
+      return;
+    }
+
+    const updated = await ShowcaseOrderEntity.findOneAndUpdate(
+      { id: orderId, ownerId },
+      { status: nextStatus },
+      { new: true },
+    )
+      .lean()
+      .exec();
+
+    if (!updated) {
+      res
+        .status(404)
+        .json({ message: EResponseMessage.SHOWCASE_ORDER_NOT_FOUND });
+      return;
+    }
+
+    res.status(200).json({
+      order: showcaseOrderDocToApi({
+        id: updated.id as string,
+        status: updated.status as string | undefined,
+        total: updated.total as number,
+        customer: updated.customer as IShowcaseOrderCustomer,
+        lines: updated.lines as IShowcaseOrderLine[],
+        createdAt: (updated as { createdAt?: Date }).createdAt,
+      }),
+    });
   } catch (error) {
     next(error);
   }

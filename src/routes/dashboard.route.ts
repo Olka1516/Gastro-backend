@@ -8,6 +8,7 @@ import {
   getDetails,
   getDishes,
   getShowcaseOrdersForOwner,
+  patchShowcaseOrderStatus,
   updateDish,
 } from "@/controllers/dashboard.controller";
 import authMiddleware from "@/middlewares/auth.middleware";
@@ -17,6 +18,11 @@ const router = Router();
 
 router.get("/get-details", authMiddleware, getDetails);
 router.get("/showcase-orders", authMiddleware, getShowcaseOrdersForOwner);
+router.patch(
+  "/showcase-orders/:orderId",
+  authMiddleware,
+  patchShowcaseOrderStatus,
+);
 router.get("/dishes", authMiddleware, getDishes);
 router.post("/dishes", authMiddleware, createDish);
 router.put("/dishes/:dishId", authMiddleware, updateDish);
