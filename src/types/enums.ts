@@ -39,6 +39,16 @@ export enum EResponseMessage {
   SHOWCASE_ORDER_RATE_LIMIT = "showcaseOrderRateLimit",
   SHOWCASE_ORDER_INVALID_STATUS = "showcaseOrderInvalidStatus",
   SHOWCASE_ORDER_NOT_FOUND = "showcaseOrderNotFound",
+  TABLE_RESERVATION_NOT_AVAILABLE = "tableReservationNotAvailable",
+  TABLE_RESERVATION_INVALID_SLOT = "tableReservationInvalidSlot",
+  TABLE_RESERVATION_RATE_LIMIT = "tableReservationRateLimit",
+  TABLE_RESERVATION_INVALID_BODY = "tableReservationInvalidBody",
+  TABLE_RESERVATION_INVALID_STATUS = "tableReservationInvalidStatus",
+  TABLE_RESERVATION_NOT_FOUND = "tableReservationNotFound",
+  TABLE_RESERVATION_RESCHEDULE_INCOMPLETE = "tableReservationRescheduleIncomplete",
+  CONTACT_FORM_INVALID = "contactFormInvalid",
+  CONTACT_FORM_RATE_LIMIT = "contactFormRateLimit",
+  CONTACT_FORM_UNAVAILABLE = "contactFormUnavailable",
 }
 
 export enum EPlan {
@@ -59,4 +69,11 @@ export enum EShowcaseOrderStatus {
   confirmed = "confirmed",
   completed = "completed",
   cancelled = "cancelled",
+}
+
+export enum ETableReservationStatus {
+  pending = "pending",
+  confirmed = "confirmed",
+  declined = "declined",
+  rescheduled = "rescheduled",
 }

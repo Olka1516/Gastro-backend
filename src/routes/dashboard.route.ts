@@ -11,6 +11,10 @@ import {
   patchShowcaseOrderStatus,
   updateDish,
 } from "@/controllers/dashboard.controller";
+import {
+  getTableReservationsForOwner,
+  patchTableReservation,
+} from "@/controllers/tableReservation.controller";
 import authMiddleware from "@/middlewares/auth.middleware";
 import { Router } from "express";
 
@@ -22,6 +26,16 @@ router.patch(
   "/showcase-orders/:orderId",
   authMiddleware,
   patchShowcaseOrderStatus,
+);
+router.get(
+  "/table-reservations",
+  authMiddleware,
+  getTableReservationsForOwner,
+);
+router.patch(
+  "/table-reservations/:reservationId",
+  authMiddleware,
+  patchTableReservation,
 );
 router.get("/dishes", authMiddleware, getDishes);
 router.post("/dishes", authMiddleware, createDish);

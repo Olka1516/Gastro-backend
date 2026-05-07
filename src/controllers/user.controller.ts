@@ -2,6 +2,8 @@ import cloudinary from "@/config/cloudinary";
 import { generateAccessToken, generateRefreshToken } from "@/config/jwt";
 import { invalidateCheckoutSessionsForEmail } from "@/controllers/stripe.controller";
 import UserEntity from "@/entities/User.entity";
+import { sendContactMessageMail } from "@/services/email.service";
+import { CONTACT_FORM } from "@/types/constants";
 import { IPlan, IUpdatedUser } from "@/types/entities";
 import { EPlan, EResponseMessage, EStatus } from "@/types/enums";
 import { CloudinaryUploadResponse } from "@/types/express";
@@ -13,6 +15,14 @@ import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
 
 const HEX_COLOR_REGEX = /^#(?:[0-9a-fA-F]{3}){1,2}$/;
+
+const isContactEmail = (s: string): boolean => {
+  if (s.length > 254 || /\s/.test(s)) {
+    return false;
+  }
+  const at = s.indexOf("@");
+  return at > 0 && at < s.length - 1;
+};
 
 export const register = async (
   req: Request,
@@ -337,6 +347,63 @@ export const updateUser = async (
         menuBackgroundColor: updatedUser.menuBackgroundColor,
         logo: updatedUser.logo,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const sendMessage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const { email, message } = req.body as {
+      email?: unknown;
+      message?: unknown;
+    };
+
+    if (
+      typeof email !== "string" ||
+      typeof message !== "string" ||
+      !email.trim() ||
+      !message.trim()
+    ) {
+      res.status(400).json({ message: EResponseMessage.IS_REQUIRED });
+      return;
+    }
+
+    const emailTrim = email.trim();
+    const messageTrim = message.trim();
+
+    if (
+      !isContactEmail(emailTrim) ||
+      messageTrim.length > CONTACT_FORM.MESSAGE_MAX
+    ) {
+      res.status(400).json({ message: EResponseMessage.CONTACT_FORM_INVALID });
+      return;
+    }
+
+    try {
+      await sendContactMessageMail(emailTrim, messageTrim);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      if (
+        msg === "SENDER_EMAIL_MISSING" ||
+        msg === "SMTP_NOT_CONFIGURED"
+      ) {
+        res
+          .status(503)
+          .json({ message: EResponseMessage.CONTACT_FORM_UNAVAILABLE });
+        return;
+      }
+      throw err;
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: "Email sent successfully",
     });
   } catch (error) {
     next(error);

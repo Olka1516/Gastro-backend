@@ -5,7 +5,9 @@ import {
   getPlanStatus,
   placeShowcaseOrder,
 } from "@/controllers/showcase.controller";
+import { createTableReservation } from "@/controllers/tableReservation.controller";
 import { showcasePlaceOrderRateLimiter } from "@/middlewares/showcasePlaceOrderRateLimit.middleware";
+import { tableReservationRateLimiter } from "@/middlewares/tableReservationRateLimit.middleware";
 import { Router } from "express";
 
 const router = Router();
@@ -18,6 +20,11 @@ router.post(
   "/place-order/:placeName",
   showcasePlaceOrderRateLimiter,
   placeShowcaseOrder,
+);
+router.post(
+  "/table-reservation/:placeSlug",
+  tableReservationRateLimiter,
+  createTableReservation,
 );
 
 export default router;

@@ -1,5 +1,7 @@
 import dotenv from "dotenv";
-dotenv.config();
+import path from "path";
+
+dotenv.config({ path: path.join(__dirname, "..", ".env") });
 import stripeRoutes from "@/routes/stripe.route";
 import userRoutes from "@/routes/user.route";
 import refreshRoutes from "@/routes/refresh.route";

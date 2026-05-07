@@ -76,3 +76,36 @@ export interface IShowcaseOrder {
   lines: IShowcaseOrderLine[];
   total: number;
 }
+
+/** Stored table reservation (Mongoose). */
+export interface ITableReservationDoc {
+  id: string;
+  ownerId: string;
+  placeName: string;
+  status: string;
+  visitDate: string;
+  visitTime: string;
+  partySize: number;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+  comment: string;
+  idempotencyKey?: string;
+  venueTimeZone?: string;
+}
+
+/** API shape for dashboard list / PATCH response. */
+export interface ITableReservation {
+  id: string;
+  createdAt: string;
+  status: string;
+  visitDate: string;
+  visitTime: string;
+  partySize: number;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+  comment: string;
+}
