@@ -9,6 +9,7 @@ export interface IUser {
   menuIconColor?: string;
   logo?: string;
   menuBackgroundColor?: string;
+  menuDishLayout?: string;
 }
 
 export interface IUpdatedUser {
@@ -16,6 +17,7 @@ export interface IUpdatedUser {
   email: string;
   menuIconColor?: string;
   menuBackgroundColor?: string;
+  menuDishLayout?: string;
   logo?: string;
 }
 

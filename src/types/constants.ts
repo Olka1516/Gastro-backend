@@ -1,5 +1,12 @@
 export const FREE_PLAN_SHOWCASE_ITEMS_LIMIT = 20;
 
+/** Allowed values for place menu dish layout (must match frontend). */
+export const MENU_DISH_LAYOUT_VALUES = ["list", "grid", "magazine"] as const;
+
+/** When the field is missing (legacy docs) or empty; matches frontend default (grid). */
+export const DEFAULT_MENU_DISH_LAYOUT: (typeof MENU_DISH_LAYOUT_VALUES)[number] =
+  "grid";
+
 export const SHOWCASE_PLACE_ORDER = {
   MAX_LINES: 50,
   MAX_QUANTITY: 999,

@@ -3,7 +3,11 @@ import { generateAccessToken, generateRefreshToken } from "@/config/jwt";
 import { invalidateCheckoutSessionsForEmail } from "@/controllers/stripe.controller";
 import UserEntity from "@/entities/User.entity";
 import { sendContactMessageMail } from "@/services/email.service";
-import { CONTACT_FORM } from "@/types/constants";
+import {
+  CONTACT_FORM,
+  DEFAULT_MENU_DISH_LAYOUT,
+  MENU_DISH_LAYOUT_VALUES,
+} from "@/types/constants";
 import { IPlan, IUpdatedUser } from "@/types/entities";
 import { EPlan, EResponseMessage, EStatus } from "@/types/enums";
 import { CloudinaryUploadResponse } from "@/types/express";
@@ -15,6 +19,9 @@ import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
 
 const HEX_COLOR_REGEX = /^#(?:[0-9a-fA-F]{3}){1,2}$/;
+
+const isMenuDishLayout = (v: string): boolean =>
+  (MENU_DISH_LAYOUT_VALUES as ReadonlyArray<string>).includes(v);
 
 const isContactEmail = (s: string): boolean => {
   if (s.length > 254 || /\s/.test(s)) {
@@ -72,6 +79,7 @@ export const register = async (
         id: newUser.id,
         email: newUser.email,
         placeName: newUser.placeName,
+        menuDishLayout: newUser.menuDishLayout ?? DEFAULT_MENU_DISH_LAYOUT,
       },
       tokens: {
         accessToken,
@@ -112,6 +120,7 @@ export const login = async (
         id: user.id,
         email: user.email,
         placeName: user.placeName,
+        menuDishLayout: user.menuDishLayout ?? DEFAULT_MENU_DISH_LAYOUT,
       },
       tokens: {
         accessToken,
@@ -221,7 +230,8 @@ export const updateUser = async (
       return;
     }
 
-    const { placeName, email, menuIconColor, menuBackgroundColor } = req.body;
+    const { placeName, email, menuIconColor, menuBackgroundColor, menuDishLayout } =
+      req.body;
 
     if (!placeName || !email) {
       res.status(400).json({ message: EResponseMessage.IS_REQUIRED });
@@ -263,6 +273,23 @@ export const updateUser = async (
       return;
     }
 
+    if (menuDishLayout !== undefined) {
+      if (
+        ![EPlan.standart, EPlan.premium].includes(userInfo.planName as EPlan)
+      ) {
+        res.status(403).json({
+          message: EResponseMessage.PLAN_MENU_DISH_LAYOUT_NOT_AVAILABLE,
+        });
+        return;
+      }
+      if (typeof menuDishLayout !== "string" || !isMenuDishLayout(menuDishLayout)) {
+        res
+          .status(400)
+          .json({ message: EResponseMessage.INVALID_MENU_DISH_LAYOUT });
+        return;
+      }
+    }
+
     const updateData: IUpdatedUser = { placeName, email };
 
     if (menuIconColor !== undefined) {
@@ -285,6 +312,10 @@ export const updateUser = async (
         return;
       }
       updateData.menuBackgroundColor = menuBackgroundColor;
+    }
+
+    if (menuDishLayout !== undefined) {
+      updateData.menuDishLayout = menuDishLayout;
     }
 
     let imageUrl = "";
@@ -345,6 +376,7 @@ export const updateUser = async (
         placeName: updatedUser.placeName,
         menuIconColor: updatedUser.menuIconColor,
         menuBackgroundColor: updatedUser.menuBackgroundColor,
+        menuDishLayout: updatedUser.menuDishLayout ?? DEFAULT_MENU_DISH_LAYOUT,
         logo: updatedUser.logo,
       },
     });

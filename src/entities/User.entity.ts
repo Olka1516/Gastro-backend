@@ -1,4 +1,8 @@
 import { EPlan, EStatus } from "@/types/enums";
+import {
+  DEFAULT_MENU_DISH_LAYOUT,
+  MENU_DISH_LAYOUT_VALUES,
+} from "@/types/constants";
 import mongoose, { Schema } from "mongoose";
 import { IUser } from "../types/entities";
 
@@ -23,6 +27,21 @@ const UserSchema: Schema = new Schema<IUser>({
   menuIconColor: { type: String, default: "" },
   logo: { type: String, default: "" },
   menuBackgroundColor: { type: String, default: "" },
+  menuDishLayout: {
+    type: String,
+    enum: [...MENU_DISH_LAYOUT_VALUES],
+    default: DEFAULT_MENU_DISH_LAYOUT,
+  },
+});
+
+UserSchema.set("toJSON", {
+  transform: (_doc, ret) => {
+    const plain = ret as Record<string, unknown>;
+    if (plain.menuDishLayout == null || plain.menuDishLayout === "") {
+      plain.menuDishLayout = DEFAULT_MENU_DISH_LAYOUT;
+    }
+    return plain;
+  },
 });
 
 export default mongoose.model<IUser & Document>("User", UserSchema);

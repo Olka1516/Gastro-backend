@@ -3,6 +3,7 @@ import DishEntity from "@/entities/Dish.entity";
 import ShowcaseOrderEntity from "@/entities/ShowcaseOrder.entity";
 import UserEntity from "@/entities/User.entity";
 import {
+  DEFAULT_MENU_DISH_LAYOUT,
   FREE_PLAN_SHOWCASE_ITEMS_LIMIT,
   SHOWCASE_PLACE_ORDER,
 } from "@/types/constants";
@@ -271,6 +272,7 @@ export const getPlaceBranding = async (
       menuBackgroundColor: userInfo.menuBackgroundColor ?? "",
       menuIconColor: userInfo.menuIconColor ?? "",
       logo: userInfo.logo ?? "",
+      menuDishLayout: userInfo.menuDishLayout ?? DEFAULT_MENU_DISH_LAYOUT,
     });
   } catch (error) {
     next(error);
