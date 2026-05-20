@@ -1,3 +1,6 @@
+import type { CategoryTranslations } from "./categoryTranslations";
+import type { DishTranslations } from "./dishTranslations";
+
 export interface IUser {
   placeName: string;
   planName: string;
@@ -30,6 +33,7 @@ export interface IDish {
   id: string;
   name: string;
   description?: string;
+  translations?: DishTranslations;
   price: number;
   category?: string;
   isAvailable: string;
@@ -40,6 +44,7 @@ export interface IDish {
 export interface ICategoryItem {
   id: string;
   name: string;
+  translations?: CategoryTranslations;
 }
 
 export interface ICategory {

@@ -17,6 +17,8 @@ import {
   EShowcaseOrderStatus,
   EStatus,
 } from "@/types/enums";
+import { categoryItemToApi } from "@/utils/categoryTranslations";
+import { dishItemToApi } from "@/utils/dishTranslations";
 import { normalizeShowcasePlaceName } from "@/utils/showcasePlaceName";
 import { NextFunction, Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
@@ -311,7 +313,7 @@ export const getDishes = async (
     const dishes = await dishesQuery;
 
     res.status(200).json({
-      dishes,
+      dishes: dishes.map((dish) => dishItemToApi(dish)),
       orderingEnabled: userInfo.planName === EPlan.premium,
     });
   } catch (error) {
@@ -344,13 +346,13 @@ export const getCategories = async (
       return;
     }
 
-    const categories =
+    const slicedCategories =
       userInfo.planName === EPlan.free
         ? categoryDoc.categories.slice(0, FREE_PLAN_SHOWCASE_ITEMS_LIMIT)
         : categoryDoc.categories;
 
     res.status(200).json({
-      categories,
+      categories: slicedCategories.map((cat) => categoryItemToApi(cat)),
     });
   } catch (error) {
     next(error);

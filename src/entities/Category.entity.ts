@@ -4,6 +4,7 @@ import { ICategory, ICategoryItem } from "../types/entities";
 const CategoryItemSchema: Schema = new Schema<ICategoryItem>({
   id: { type: String, required: true },
   name: { type: String, required: true },
+  translations: { type: Schema.Types.Mixed, required: false },
 });
 
 const CategorySchema: Schema = new Schema<ICategory>(
@@ -13,7 +14,7 @@ const CategorySchema: Schema = new Schema<ICategory>(
     categories: { type: [CategoryItemSchema], default: [] },
   },
   {
-    timestamps: true, // This will automatically add createdAt and updatedAt fields
+    timestamps: true,
   }
 );
 

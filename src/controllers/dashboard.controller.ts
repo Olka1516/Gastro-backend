@@ -4,7 +4,11 @@ import DishEntity from "@/entities/Dish.entity";
 import ShowcaseOrderEntity from "@/entities/ShowcaseOrder.entity";
 import UserEntity from "@/entities/User.entity";
 import { FREE_PLAN_SHOWCASE_ITEMS_LIMIT } from "@/types/constants";
-import { IShowcaseOrderCustomer, IShowcaseOrderLine } from "@/types/entities";
+import {
+  IDish,
+  IShowcaseOrderCustomer,
+  IShowcaseOrderLine,
+} from "@/types/entities";
 import {
   EPlan,
   EResponseMessage,
@@ -16,6 +20,18 @@ import { NextFunction, Request, Response } from "express";
 import { UploadedFile } from "express-fileupload";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
+import {
+  buildCategoryWritePayload,
+  categoryItemToApi,
+  ensureCategoryUkName,
+  mergeCategoryTranslations,
+} from "@/utils/categoryTranslations";
+import {
+  buildDishWritePayload,
+  dishItemToApi,
+  ensureDishUkFields,
+  mergeDishTranslations,
+} from "@/utils/dishTranslations";
 import {
   checkSession,
   isCheckoutSessionInvalidated,
@@ -317,12 +333,26 @@ export const createDish = async (
       return;
     }
 
-    const { name, description, price, category, isAvailable } = req.body;
-
-    if (!name) {
-      res.status(400).json({ message: EResponseMessage.DISH_NAME_REQUIRED });
+    const userInfo = await UserEntity.findOne({ id: ownerId });
+    if (!userInfo) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
       return;
     }
+
+    const writeResult = buildDishWritePayload(userInfo.planName, req.body);
+    if (!writeResult.ok) {
+      res.status(writeResult.status).json({ message: writeResult.message });
+      return;
+    }
+
+    const {
+      name,
+      description,
+      translations,
+      persistTranslations,
+    } = writeResult.payload;
+
+    const { price, category, isAvailable } = req.body;
 
     if (!price && price !== 0) {
       res.status(400).json({ message: EResponseMessage.DISH_PRICE_REQUIRED });
@@ -377,7 +407,7 @@ export const createDish = async (
       imageUrl = uploadResult.secure_url;
     }
 
-    const newDish = await DishEntity.create({
+    const dishData: IDish = {
       id: uuidv4(),
       name,
       description,
@@ -386,11 +416,21 @@ export const createDish = async (
       isAvailable: isAvailable || "available",
       image: imageUrl,
       ownerId,
-    });
+    };
+
+    if (persistTranslations && translations) {
+      dishData.translations = ensureDishUkFields(
+        translations,
+        name,
+        description,
+      );
+    }
+
+    const newDish = await DishEntity.create(dishData);
 
     res.status(201).json({
       message: EResponseMessage.DISH_CREATED,
-      dish: newDish,
+      dish: dishItemToApi(newDish),
     });
   } catch (error) {
     next(error);
@@ -410,10 +450,16 @@ export const updateDish = async (
     }
 
     const { dishId } = req.params;
-    const { name, description, price, category, isAvailable } = req.body;
+    const { price, category, isAvailable } = req.body;
 
     if (!dishId) {
       res.status(400).json({ message: EResponseMessage.IS_REQUIRED });
+      return;
+    }
+
+    const userInfo = await UserEntity.findOne({ id: ownerId });
+    if (!userInfo) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
       return;
     }
 
@@ -423,14 +469,83 @@ export const updateDish = async (
       return;
     }
 
+    const hasTranslationsPayload =
+      req.body.translations !== undefined && req.body.translations !== null;
+    const hasNameOrDescPayload =
+      req.body.name !== undefined || req.body.description !== undefined;
+
+    let resolvedName = existingDish.name;
+    let resolvedDescription = existingDish.description;
+
+    if (hasTranslationsPayload) {
+      const writeResult = buildDishWritePayload(userInfo.planName, {
+        name: req.body.name ?? existingDish.name,
+        description:
+          req.body.description !== undefined
+            ? req.body.description
+            : existingDish.description,
+        translations: req.body.translations,
+      });
+      if (!writeResult.ok) {
+        res.status(writeResult.status).json({ message: writeResult.message });
+        return;
+      }
+      resolvedName = writeResult.payload.name;
+      if (writeResult.payload.description !== undefined) {
+        resolvedDescription = writeResult.payload.description;
+      }
+
+      if (writeResult.payload.persistTranslations && writeResult.payload.translations) {
+        const merged = mergeDishTranslations(
+          existingDish.translations,
+          writeResult.payload.translations,
+        );
+        existingDish.translations = ensureDishUkFields(
+          merged,
+          resolvedName,
+          resolvedDescription,
+        );
+      }
+    } else if (hasNameOrDescPayload) {
+      if (req.body.name !== undefined) {
+        if (typeof req.body.name !== "string" || !req.body.name.trim()) {
+          res.status(400).json({ message: EResponseMessage.DISH_NAME_REQUIRED });
+          return;
+        }
+        resolvedName = req.body.name.trim();
+      }
+      if (req.body.description !== undefined) {
+        resolvedDescription =
+          typeof req.body.description === "string" &&
+          req.body.description.trim()
+            ? req.body.description.trim()
+            : undefined;
+      }
+      if (existingDish.translations) {
+        existingDish.translations = ensureDishUkFields(
+          existingDish.translations,
+          resolvedName,
+          resolvedDescription,
+        );
+      }
+    }
+
+    const hasNameOrDescOrTranslations =
+      hasTranslationsPayload || hasNameOrDescPayload;
+
     if (price !== undefined && price < 0) {
       res.status(400).json({ message: EResponseMessage.INVALID_PRICE });
       return;
     }
 
-    const updateData: any = {};
-    if (name !== undefined) updateData.name = name;
-    if (description !== undefined) updateData.description = description;
+    const updateData: Record<string, unknown> = {};
+    if (hasNameOrDescOrTranslations) {
+      updateData.name = resolvedName;
+      updateData.description = resolvedDescription;
+      if (existingDish.translations) {
+        updateData.translations = existingDish.translations;
+      }
+    }
     if (price !== undefined) updateData.price = Number(price);
     if (category !== undefined) updateData.category = category;
     if (isAvailable !== undefined) updateData.isAvailable = isAvailable;
@@ -490,7 +605,7 @@ export const updateDish = async (
 
     res.status(200).json({
       message: EResponseMessage.DISH_UPDATED,
-      dish: updatedDish,
+      dish: updatedDish ? dishItemToApi(updatedDish) : null,
     });
   } catch (error) {
     next(error);
@@ -512,7 +627,7 @@ export const getDishes = async (
     const dishes = await DishEntity.find({ ownerId }).sort({ createdAt: -1 });
 
     res.status(200).json({
-      dishes,
+      dishes: dishes.map((dish) => dishItemToApi(dish)),
     });
   } catch (error) {
     next(error);
@@ -588,7 +703,7 @@ export const getCategories = async (
     }
 
     res.status(200).json({
-      categories: categoryDoc.categories,
+      categories: categoryDoc.categories.map((cat) => categoryItemToApi(cat)),
     });
   } catch (error) {
     next(error);
@@ -607,14 +722,19 @@ export const addCategory = async (
       return;
     }
 
-    const { name } = req.body;
-
-    if (!name) {
-      res
-        .status(400)
-        .json({ message: EResponseMessage.CATEGORY_NAME_REQUIRED });
+    const userInfo = await UserEntity.findOne({ id: ownerId });
+    if (!userInfo) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
       return;
     }
+
+    const writeResult = buildCategoryWritePayload(userInfo.planName, req.body);
+    if (!writeResult.ok) {
+      res.status(writeResult.status).json({ message: writeResult.message });
+      return;
+    }
+
+    const { name, translations, persistTranslations } = writeResult.payload;
 
     if (await isFreeCategoryLimitReached(ownerId)) {
       res.status(400).json({ message: EResponseMessage.FREE_PLAN_ITEMS_LIMIT });
@@ -640,17 +760,25 @@ export const addCategory = async (
       return;
     }
 
-    const newCategory = {
+    const newCategory: {
+      id: string;
+      name: string;
+      translations?: typeof translations;
+    } = {
       id: uuidv4(),
       name,
     };
+
+    if (persistTranslations && translations) {
+      newCategory.translations = ensureCategoryUkName(translations, name);
+    }
 
     categoryDoc.categories.push(newCategory);
     await categoryDoc.save();
 
     res.status(201).json({
       message: EResponseMessage.CATEGORY_CREATED,
-      category: newCategory,
+      category: categoryItemToApi(newCategory),
     });
   } catch (error) {
     next(error);
@@ -670,19 +798,25 @@ export const editCategory = async (
     }
 
     const { id } = req.params;
-    const { name } = req.body;
 
     if (!id) {
       res.status(400).json({ message: EResponseMessage.IS_REQUIRED });
       return;
     }
 
-    if (!name) {
-      res
-        .status(400)
-        .json({ message: EResponseMessage.CATEGORY_NAME_REQUIRED });
+    const userInfo = await UserEntity.findOne({ id: ownerId });
+    if (!userInfo) {
+      res.status(401).json({ message: EResponseMessage.INVALID_CREDENTIALS });
       return;
     }
+
+    const writeResult = buildCategoryWritePayload(userInfo.planName, req.body);
+    if (!writeResult.ok) {
+      res.status(writeResult.status).json({ message: writeResult.message });
+      return;
+    }
+
+    const { name, translations, persistTranslations } = writeResult.payload;
 
     const categoryDoc = await CategoryEntity.findOne({ ownerId });
     if (!categoryDoc) {
@@ -708,11 +842,29 @@ export const editCategory = async (
     }
 
     categoryDoc.categories[categoryIndex].name = name;
+    if (persistTranslations && translations) {
+      categoryDoc.categories[categoryIndex].translations = ensureCategoryUkName(
+        mergeCategoryTranslations(
+          categoryDoc.categories[categoryIndex].translations,
+          translations,
+        ),
+        name,
+      );
+    } else {
+      const existingTranslations =
+        categoryDoc.categories[categoryIndex].translations;
+      if (existingTranslations) {
+        categoryDoc.categories[categoryIndex].translations = ensureCategoryUkName(
+          existingTranslations,
+          name,
+        );
+      }
+    }
     await categoryDoc.save();
 
     res.status(200).json({
       message: EResponseMessage.CATEGORY_UPDATED,
-      category: categoryDoc.categories[categoryIndex],
+      category: categoryItemToApi(categoryDoc.categories[categoryIndex]),
     });
   } catch (error) {
     next(error);
